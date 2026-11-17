@@ -109,6 +109,14 @@ Cloud-hosted recruiter-assist application for US IT staffing. The product is bei
 - Automatically create or advance pipeline records from existing sourcing, qualification, screening, submission, and interview workflows where supported.
 - Pipeline updates do not send messages, submit profiles, or make hiring decisions automatically.
 
+## Milestone 11: Recruiter Productivity Dashboard
+
+- Provide selectable 7-, 30-, 90-, and 365-day reporting periods.
+- Summarize new requirements, candidate records, sourcing tasks, pending approvals, active pipeline, completed screenings, client submissions, and interviews.
+- Show pipeline distribution by stage, recruiter workload, qualification decisions, submission statuses, sourcing progress, and recent workflow activity.
+- Highlight overdue and upcoming pipeline actions only when a time-zone offset is available; local due times without an offset are not falsely classified.
+- Dashboard metrics are descriptive workflow counts, not recruiter performance scores or candidate suitability decisions.
+
 ## Existing recruiter-assist features
 
 - Prepare LinkedIn People Search URLs for the recruiter to open in their authorized LinkedIn session.
@@ -155,3 +163,5 @@ No login, role-based access control, tenant isolation, managed persistent databa
 Milestone 1 development implementation is complete; its runtime verification and test/sign-off remain deferred. Milestone 2 development implementation is complete; runtime verification and testing remain deferred. Milestone 3 development implementation is complete; runtime verification and testing remain deferred. Milestone 4 development implementation is complete; runtime verification and testing remain deferred. Milestone 5 development implementation is complete; runtime verification and testing remain deferred. Milestone 6 development implementation is complete; runtime verification and testing remain deferred. Milestone 7 development implementation is complete; runtime verification and testing remain deferred. Milestone 8 development implementation is complete; runtime verification and testing remain deferred. Milestone 9 development implementation is complete; runtime verification and testing remain deferred.
 
 Milestone 10 development implementation is complete; runtime verification and testing remain deferred.
+
+Milestone 11 development implementation is complete; runtime verification and testing remain deferred.
