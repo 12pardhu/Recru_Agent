@@ -86,19 +86,25 @@ def evaluate(job,candidate):
         criteria.append({"criterion":"Work authorization","status":"Meets — candidate confirmed" if auth_match else "Does not meet","required":job_auth,"candidate_value":cand_auth,"evidence":"Candidate-confirmed value recorded in the candidate profile."})
 
     employment=[x.lower() for x in tokens(job.get("employment_type","")) if x.lower()!="unknown"]
-    if "c2c" in employment:
-        c2c_confirmed=candidate.get("c2c_confirmed")=="Candidate confirmed"
-        c2c=candidate.get("c2c_status") or "Unknown"
-        if not c2c_confirmed or c2c=="Unknown":
-            status="Unknown"
-            evidence="C2C has not been confirmed by the candidate."
-        elif c2c=="Confirmed":
-            status="Meets — candidate confirmed"; evidence="Candidate confirmed C2C availability."
+    if employment:
+        preference=candidate.get("employment_preference") or "Unknown"
+        preference_confirmed=candidate.get("employment_preference_confirmed")=="Candidate confirmed"
+        if preference_confirmed and preference!="Unknown":
+            accepted=preference.lower()=="both" or preference.lower() in employment
+            status="Meets — candidate confirmed" if accepted else "Does not meet"
+            criteria.append({"criterion":"Employment type","status":status,"required":employment,"candidate_value":preference,"evidence":"Candidate-confirmed engagement preference recorded in the candidate profile."})
+        elif "c2c" in employment:
+            c2c_confirmed=candidate.get("c2c_confirmed")=="Candidate confirmed"
+            c2c=candidate.get("c2c_status") or "Unknown"
+            if not c2c_confirmed or c2c=="Unknown":
+                status="Unknown"; evidence="C2C has not been confirmed by the candidate."
+            elif c2c=="Confirmed":
+                status="Meets — candidate confirmed"; evidence="Candidate confirmed C2C availability."
+            else:
+                status="Does not meet"; evidence="Candidate confirmed C2C is not available."
+            criteria.append({"criterion":"C2C availability","status":status,"required":"C2C","candidate_value":c2c,"evidence":evidence})
         else:
-            status="Does not meet"; evidence="Candidate confirmed C2C is not available."
-        criteria.append({"criterion":"C2C availability","status":status,"required":"C2C","candidate_value":c2c,"evidence":evidence})
-    elif employment:
-        criteria.append({"criterion":"Employment type","status":"Needs recruiter review","required":employment,"candidate_value":"Not recorded","evidence":"Confirm the candidate's acceptable engagement type before proceeding."})
+            criteria.append({"criterion":"Employment type","status":"Unknown","required":employment,"candidate_value":"Unknown","evidence":"Candidate has not confirmed the acceptable engagement type."})
     else:
         criteria.append({"criterion":"Employment type","status":"Not specified","required":[],"candidate_value":"Not evaluated","evidence":"The job does not state an employment type."})
 
