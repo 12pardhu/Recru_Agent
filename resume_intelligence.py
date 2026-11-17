@@ -42,9 +42,12 @@ def extract_section(text, headings, stops):
 def parse_resume(text):
     lines = [x.strip() for x in text.splitlines() if x.strip()]
     name = ""
+    role_words=("developer","engineer","architect","analyst","manager","consultant","specialist","programmer","administrator","recruiter","designer")
     for line in lines[:8]:
-        if len(line) <= 80 and not re.search(r"@|https?://|linkedin\.com|github\.com|\+?\d[\d ()-]{7,}", line, re.I) and line.lower() not in ("resume","curriculum vitae","cv","profile"):
-            name = line; break
+        candidate_name=line.split("|")[0].strip()
+        words=candidate_name.split()
+        if 2 <= len(words) <= 4 and len(candidate_name) <= 65 and not any(w in candidate_name.lower() for w in role_words) and not re.search(r"@|https?://|linkedin\.com|github\.com|\+?\d[\d ()-]{7,}", candidate_name, re.I) and candidate_name.lower() not in ("resume","curriculum vitae","cv","profile"):
+            name = candidate_name; break
     email_m = re.search(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", text, re.I)
     phone_m = re.search(r"(?<!\w)(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}(?!\w)", text)
     location_m = re.search(r"^\s*(?:location|based in|address)\s*[:\-]\s*([^\n]+)", text, re.I | re.M)
