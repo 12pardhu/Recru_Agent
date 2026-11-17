@@ -1,9 +1,8 @@
-# Cloud deployment (Render)
+# Render deployment
 
-1. Push this repository to GitHub (the project is hosted in `12pardhu/Recru_Agent`).
-2. Sign in to Render and choose **New + → Blueprint**.
-3. Connect the GitHub repository `12pardhu/Recru_Agent`.
-4. Render detects `render.yaml`; review the service and create it.
-5. After deployment, open the Render URL and confirm `/api/health` returns status `ok`.
+1. Repository: https://github.com/12pardhu/Recru_Agent
+2. Render dashboard → existing Blueprint/service.
+3. GitHub pushes to main trigger a deployment if auto-deploy is enabled; otherwise use Manual Deploy → Deploy latest commit.
+4. Wait for deployment to finish, then check https://recru-agent.onrender.com/api/health and open the service URL.
 
-Important: the included Render configuration is a starter deployment. The free instance's local filesystem may be ephemeral, so records may be lost on redeploy/restart. Configure a managed persistent database/storage before using operational data. Do not deploy publicly with real candidate data before adding authentication and access controls.
+The Render free filesystem may be ephemeral. Do not use this for operational candidate records until managed persistent storage/database and backups are configured.

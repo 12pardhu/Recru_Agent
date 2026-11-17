@@ -1,37 +1,68 @@
 from pathlib import Path
-import os, sqlite3, re
 from datetime import datetime, timezone
+from urllib.parse import quote_plus
+import csv, io, os, re, sqlite3
 from fastapi import FastAPI, HTTPException, UploadFile, File
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 ROOT=Path(__file__).parent
 DATA=Path(os.getenv("DATA_DIR", str(ROOT/"data")))
 DATA.mkdir(parents=True, exist_ok=True)
 DB=DATA/"recru_agent.db"
-app=FastAPI(title="Recru Agent - AI OPT Recruiter Agent", version="2.0.0")
+app=FastAPI(title="Recru Agent", version="3.0.0")
 
-def connect():
+def db():
     c=sqlite3.connect(DB); c.row_factory=sqlite3.Row; return c
+def now(): return datetime.now(timezone.utc).isoformat()
 def init():
-    with connect() as c:
+    with db() as c:
         c.executescript("""
         CREATE TABLE IF NOT EXISTS jobs(id INTEGER PRIMARY KEY, title TEXT NOT NULL, location TEXT DEFAULT '', min_experience INTEGER DEFAULT 0, skills TEXT DEFAULT '', work_auth TEXT DEFAULT 'Unknown', jd_text TEXT DEFAULT '', created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS candidates(id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT DEFAULT '', location TEXT DEFAULT '', experience REAL DEFAULT 0, skills TEXT DEFAULT '', work_auth TEXT DEFAULT 'Unknown', c2c_status TEXT DEFAULT 'Unknown', linkedin_url TEXT DEFAULT '', resume_text TEXT DEFAULT '', created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS approvals(id INTEGER PRIMARY KEY, candidate_id INTEGER NOT NULL, job_id INTEGER NOT NULL, status TEXT DEFAULT 'Pending', notes TEXT DEFAULT '', created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS sourcing_tasks(id INTEGER PRIMARY KEY, job_id INTEGER NOT NULL, mode TEXT NOT NULL, query_text TEXT NOT NULL, linkedin_url TEXT NOT NULL, status TEXT DEFAULT 'Prepared', created_at TEXT NOT NULL);
         """)
+        migrations={
+          "jobs":{"domain":"TEXT DEFAULT ''","preferred_skills":"TEXT DEFAULT ''","employment_type":"TEXT DEFAULT 'Unknown'","source_mode":"TEXT DEFAULT 'both'"},
+          "candidates":{"open_to_work":"TEXT DEFAULT 'Unknown'","availability_signal":"TEXT DEFAULT 'Unknown'","profile_updated":"TEXT DEFAULT ''","source_type":"TEXT DEFAULT 'Manual'","source_url":"TEXT DEFAULT ''","source_evidence":"TEXT DEFAULT ''","c2c_confirmed":"TEXT DEFAULT 'Unknown'"}
+        }
+        for table,cols in migrations.items():
+            existing={r["name"] for r in c.execute(f"PRAGMA table_info({table})")}
+            for name,definition in cols.items():
+                if name not in existing: c.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
 init()
-def now(): return datetime.now(timezone.utc).isoformat()
-def rows(q,args=()):
-    with connect() as c: return [dict(x) for x in c.execute(q,args).fetchall()]
+
+def rows(sql,args=()):
+    with db() as c: return [dict(r) for r in c.execute(sql,args).fetchall()]
+def tokens(s): return [x.strip() for x in re.split(r"[,;\n|]",s or "") if x.strip()]
+def extract_jd(text):
+    lines=[x.strip(" •-*\t") for x in text.splitlines() if x.strip()]
+    title=next((x for x in lines if len(x)<100), "New Job Requirement")
+    low=text.lower()
+    skill_bank=["python","java","javascript","typescript","react","node.js","spring boot","microservices","aws","azure","gcp","sql","postgresql","machine learning","deep learning","pytorch","tensorflow","llm","data engineering","spark","kafka","salesforce"," .net","c#"," kubernetes","docker","terraform","snowflake","databricks"]
+    found=[s.strip() for s in skill_bank if s.strip() and s.strip() in low]
+    exp=re.search(r"(\d+)\s*\+?\s*(?:years|yrs)",low)
+    loc=[]
+    for pattern in [r"location\s*[:\-]\s*([^\n,;]+(?:,\s*[A-Z]{2})?)",r"based in\s+([^\n,;]+)"]:
+        m=re.search(pattern,text,re.I)
+        if m: loc.append(m.group(1).strip()); break
+    auth=next((x for x in ["STEM OPT","OPT","H-1B","Green Card","US Citizen"] if x.lower() in low),"Unknown")
+    domain=next((x for x in ["AI/ML","Data Engineering","Cloud/DevOps","Software Engineering","QA/Testing","Cybersecurity"] if any(k in low for k in {"AI/ML":["machine learning","deep learning","llm","ai/ml"],"Data Engineering":["data engineer","spark","kafka","databricks"],"Cloud/DevOps":["devops","aws","azure","kubernetes"],"Software Engineering":["developer","software engineer","java","python"],"QA/Testing":["qa","automation testing"],"Cybersecurity":["security engineer","cybersecurity"]}[x])),"General IT")
+    return {"title":title[:120],"domain":domain,"location":loc[0] if loc else "","min_experience":int(exp.group(1)) if exp else 0,"skills":", ".join(found),"preferred_skills":"","work_auth":auth,"employment_type":"Unknown","jd_text":text}
+
 class JobIn(BaseModel):
     title:str
     location:str=""
     min_experience:int=0
     skills:str=""
+    preferred_skills:str=""
+    domain:str=""
     work_auth:str="Unknown"
+    employment_type:str="Unknown"
     jd_text:str=""
+    source_mode:str="both"
 class CandidateIn(BaseModel):
     name:str
     email:str=""
@@ -40,53 +71,97 @@ class CandidateIn(BaseModel):
     skills:str=""
     work_auth:str="Unknown"
     c2c_status:str="Unknown"
+    c2c_confirmed:str="Unknown"
     linkedin_url:str=""
     resume_text:str=""
+    open_to_work:str="Unknown"
+    availability_signal:str="Unknown"
+    profile_updated:str=""
+    source_type:str="Manual"
+    source_url:str=""
+    source_evidence:str=""
+
 @app.get("/api/health")
-def health(): return {"status":"ok","app":"Recru Agent","version":"2.0.0"}
+def health(): return {"status":"ok","app":"Recru Agent","version":"3.0.0"}
 @app.get("/api/dashboard")
 def dashboard():
-    return {"jobs":len(rows("SELECT id FROM jobs")),"candidates":len(rows("SELECT id FROM candidates")),"pending_approvals":len(rows("SELECT id FROM approvals WHERE status='Pending'"))}
+    return {"jobs":len(rows("SELECT id FROM jobs")),"candidates":len(rows("SELECT id FROM candidates")),"pending_approvals":len(rows("SELECT id FROM approvals WHERE status='Pending'")),"sourcing_tasks":len(rows("SELECT id FROM sourcing_tasks"))}
 @app.get("/api/jobs")
 def get_jobs(): return rows("SELECT * FROM jobs ORDER BY id DESC")
 @app.post("/api/jobs")
 def add_job(j:JobIn):
     if not j.title.strip(): raise HTTPException(400,"Job title is required")
-    with connect() as c:
-        cur=c.execute("INSERT INTO jobs(title,location,min_experience,skills,work_auth,jd_text,created_at) VALUES(?,?,?,?,?,?,?)",(j.title,j.location,j.min_experience,j.skills,j.work_auth,j.jd_text,now()))
-        return {"id":cur.lastrowid,"message":"Job requirement saved"}
+    with db() as c:
+        cur=c.execute("INSERT INTO jobs(title,location,min_experience,skills,work_auth,jd_text,created_at,domain,preferred_skills,employment_type,source_mode) VALUES(?,?,?,?,?,?,?,?,?,?,?)",(j.title.strip(),j.location,j.min_experience,j.skills,j.work_auth,j.jd_text,now(),j.domain,j.preferred_skills,j.employment_type,j.source_mode))
+        jid=cur.lastrowid
+    # Both modes are prepared at intake. Auto mode creates a task; recruiter can also run it on demand.
+    return {"id":jid,"message":"Requirement saved; sourcing plan can now be prepared","sourcing_plan":build_plan(jid)}
 @app.get("/api/candidates")
 def get_candidates(): return rows("SELECT * FROM candidates ORDER BY id DESC")
 @app.post("/api/candidates")
 def add_candidate(p:CandidateIn):
     if not p.name.strip(): raise HTTPException(400,"Candidate name is required")
-    with connect() as c:
-        cur=c.execute("INSERT INTO candidates(name,email,location,experience,skills,work_auth,c2c_status,linkedin_url,resume_text,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",(p.name,p.email,p.location,p.experience,p.skills,p.work_auth,p.c2c_status,p.linkedin_url,p.resume_text,now()))
+    if p.linkedin_url and not re.match(r"^https?://(www\.)?linkedin\.com/",p.linkedin_url.strip(),re.I): raise HTTPException(400,"Enter a valid LinkedIn profile URL")
+    with db() as c:
+        if p.email and c.execute("SELECT id FROM candidates WHERE lower(email)=lower(?) AND email<>''",(p.email,)).fetchone(): raise HTTPException(409,"Possible duplicate: a candidate with this email already exists")
+        if p.linkedin_url and c.execute("SELECT id FROM candidates WHERE lower(linkedin_url)=lower(?) AND linkedin_url<>''",(p.linkedin_url,)).fetchone(): raise HTTPException(409,"Possible duplicate: this LinkedIn profile is already saved")
+        cur=c.execute("""INSERT INTO candidates(name,email,location,experience,skills,work_auth,c2c_status,linkedin_url,resume_text,created_at,open_to_work,availability_signal,profile_updated,source_type,source_url,source_evidence,c2c_confirmed)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(p.name,p.email,p.location,p.experience,p.skills,p.work_auth,p.c2c_status,p.linkedin_url,p.resume_text,now(),p.open_to_work,p.availability_signal,p.profile_updated,p.source_type,p.source_url,p.source_evidence,p.c2c_confirmed))
         return {"id":cur.lastrowid,"message":"Candidate saved"}
-@app.post("/api/jobs/{job_id}/match")
-def match(job_id:int):
-    jobs=rows("SELECT * FROM jobs WHERE id=?",(job_id,))
-    if not jobs: raise HTTPException(404,"Job not found")
-    j=jobs[0]; required={x.strip().lower() for x in j["skills"].split(",") if x.strip()}
-    out=[]
-    for p in rows("SELECT * FROM candidates"):
-        skills={x.strip().lower() for x in p["skills"].split(",") if x.strip()}
-        overlap=required & skills
-        score=round(100*(len(overlap)/len(required)) if required else 0)
-        if j["min_experience"] and p["experience"]>=j["min_experience"]: score=min(100,score+15)
-        if j["location"] and j["location"].lower() in p["location"].lower(): score=min(100,score+10)
-        out.append({"candidate":p,"score":score,"matched_skills":sorted(overlap),"missing_skills":sorted(required-skills),"work_auth":p["work_auth"],"c2c_status":p["c2c_status"]})
-    return sorted(out,key=lambda x:x["score"],reverse=True)
+def build_plan(job_id):
+    js=rows("SELECT * FROM jobs WHERE id=?",(job_id,))
+    if not js: raise HTTPException(404,"Job not found")
+    j=js[0]
+    keywords=" ".join([j["title"],j.get("domain",""),j["skills"],j["location"]]).strip()
+    query=" ".join(x for x in [j["title"],j.get("domain",""),j["skills"],j["location"],"Open to Work"] if x)
+    url="https://www.linkedin.com/search/results/people/?keywords="+quote_plus(query)
+    with db() as c:
+        cur=c.execute("INSERT INTO sourcing_tasks(job_id,mode,query_text,linkedin_url,status,created_at) VALUES(?,?,?,?,?,?)",(job_id,"Both",query,url,"Prepared",now()))
+        task_id=cur.lastrowid
+    return {"task_id":task_id,"mode":"Automatic preparation + recruiter-triggered search","query":query,"linkedin_search_url":url,"status":"Prepared","note":"This creates a search plan and opens LinkedIn for a recruiter to review. It does not scrape LinkedIn or automatically extract profile data."}
+@app.post("/api/jobs/{job_id}/sourcing-plan")
+def sourcing_plan(job_id:int): return build_plan(job_id)
+@app.get("/api/sourcing")
+def sourcing_tasks(): return rows("SELECT s.*,j.title job_title FROM sourcing_tasks s JOIN jobs j ON j.id=s.job_id ORDER BY s.id DESC")
 @app.post("/api/jobs/upload")
 async def upload_jd(file:UploadFile=File(...)):
-    name=file.filename or ""
-    if not name.lower().endswith((".txt",".md")): raise HTTPException(415,"For this starter version, upload a .txt or .md job description.")
-    text=(await file.read()).decode("utf-8",errors="replace")
-    title=next((line.strip("# -*\t ") for line in text.splitlines() if line.strip()),"New Job Requirement")
-    return {"title":title[:120],"jd_text":text}
+    name=(file.filename or "").lower(); raw=await file.read()
+    try:
+        if name.endswith((".txt",".md")): text=raw.decode("utf-8",errors="replace")
+        elif name.endswith(".pdf"):
+            from pypdf import PdfReader
+            reader=PdfReader(io.BytesIO(raw)); text="\n".join(p.extract_text() or "" for p in reader.pages)
+        elif name.endswith(".docx"):
+            from docx import Document
+            doc=Document(io.BytesIO(raw)); text="\n".join(p.text for p in doc.paragraphs)
+        else: raise HTTPException(415,"Upload a TXT, MD, PDF, or DOCX file.")
+    except HTTPException: raise
+    except Exception as e: raise HTTPException(400,"Could not read this file. If it is a scanned PDF, OCR is required.") from e
+    if not text.strip(): raise HTTPException(400,"No readable text found in the file.")
+    return extract_jd(text)
+@app.post("/api/jobs/{job_id}/match")
+def match(job_id:int):
+    js=rows("SELECT * FROM jobs WHERE id=?",(job_id,))
+    if not js: raise HTTPException(404,"Job not found")
+    j=js[0]; required={x.lower() for x in tokens(j["skills"])}; preferred={x.lower() for x in tokens(j.get("preferred_skills",""))}
+    out=[]
+    for p in rows("SELECT * FROM candidates"):
+        skills={x.lower() for x in tokens(p["skills"])}; matched=required&skills; pref=preferred&skills
+        skill_score=round(65*len(matched)/len(required)) if required else 0
+        exp_score=15 if p["experience"]>=j["min_experience"] else (round(15*p["experience"]/j["min_experience"]) if j["min_experience"] else 0)
+        loc_score=10 if not j["location"] or j["location"].lower() in p["location"].lower() else 0
+        auth_match=bool(j["work_auth"]=="Unknown" or p["work_auth"].lower()==j["work_auth"].lower() or j["work_auth"]=="Any US work authorization")
+        auth_score=10 if auth_match and p["work_auth"]!="Unknown" else (5 if j["work_auth"]=="Unknown" else 0)
+        base=min(100,skill_score+exp_score+loc_score+auth_score+min(5,len(pref)*2))
+        otw=p.get("open_to_work","Unknown")
+        priority={"Yes":10,"Actively looking":10,"Interested":6,"No":0,"Unknown":0}.get(otw,0)
+        out.append({"candidate":p,"score":min(100,base+priority),"base_match":base,"availability_priority":priority,"matched_skills":sorted(matched),"preferred_matches":sorted(pref),"missing_skills":sorted(required-skills),"authorization_match":auth_match,"open_to_work":otw})
+    return sorted(out,key=lambda x:(x["score"],x["base_match"]),reverse=True)
 @app.post("/api/approvals")
 def create_approval(payload:dict):
-    with connect() as c:
+    with db() as c:
+        if not c.execute("SELECT id FROM candidates WHERE id=?",(int(payload["candidate_id"]),)).fetchone(): raise HTTPException(404,"Candidate not found")
+        if not c.execute("SELECT id FROM jobs WHERE id=?",(int(payload["job_id"]),)).fetchone(): raise HTTPException(404,"Job not found")
         cur=c.execute("INSERT INTO approvals(candidate_id,job_id,status,notes,created_at) VALUES(?,?, 'Pending',?,?)",(int(payload["candidate_id"]),int(payload["job_id"]),str(payload.get("notes","")),now()))
         return {"id":cur.lastrowid,"status":"Pending"}
 @app.get("/api/approvals")
@@ -95,10 +170,16 @@ def get_approvals(): return rows("SELECT a.*,p.name candidate_name,j.title job_t
 def update_approval(approval_id:int,payload:dict):
     status=payload.get("status")
     if status not in ("Approved","Rejected"): raise HTTPException(400,"Status must be Approved or Rejected")
-    with connect() as c:
+    with db() as c:
         cur=c.execute("UPDATE approvals SET status=?,notes=? WHERE id=?",(status,str(payload.get("notes","")),approval_id))
         if not cur.rowcount: raise HTTPException(404,"Approval not found")
     return {"id":approval_id,"status":status}
+@app.get("/api/candidates/export")
+def export_candidates():
+    data=rows("SELECT * FROM candidates ORDER BY id")
+    buf=io.StringIO(); fields=list(data[0].keys()) if data else ["id","name","email","location","experience","skills","work_auth","c2c_status","linkedin_url","open_to_work","availability_signal","source_type"]
+    w=csv.DictWriter(buf,fieldnames=fields); w.writeheader(); w.writerows(data)
+    return StreamingResponse(iter([buf.getvalue()]),media_type="text/csv",headers={"Content-Disposition":"attachment; filename=recru_agent_candidates.csv"})
 app.mount("/static",StaticFiles(directory=ROOT/"static"),name="static")
 @app.get("/",response_class=HTMLResponse)
 def home(): return (ROOT/"static"/"index.html").read_text(encoding="utf-8")
