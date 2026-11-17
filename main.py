@@ -258,10 +258,11 @@ def match(job_id:int):
         candidate_auth=p["work_auth"] if p.get("work_auth_confirmed")=="Candidate confirmed" else "Unknown"
         auth_match=bool(j["work_auth"]=="Unknown" or candidate_auth.lower()==j["work_auth"].lower() or j["work_auth"]=="Any US work authorization")
         auth_score=10 if auth_match and candidate_auth!="Unknown" else (5 if j["work_auth"]=="Unknown" else 0)
+        candidate_view=dict(p); candidate_view["work_auth"]=candidate_auth
         base=min(100,skill_score+exp_score+loc_score+auth_score+min(5,len(pref)*2))
         otw=p.get("open_to_work","Unknown")
         priority={"Yes":10,"Actively looking":10,"Interested":6,"No":0,"Unknown":0}.get(otw,0)
-        out.append({"candidate":p,"score":min(100,base+priority),"base_match":base,"availability_priority":priority,"matched_skills":sorted(matched),"preferred_matches":sorted(pref),"missing_skills":sorted(required-skills),"authorization_match":auth_match,"open_to_work":otw})
+        out.append({"candidate":candidate_view,"score":min(100,base+priority),"base_match":base,"availability_priority":priority,"matched_skills":sorted(matched),"preferred_matches":sorted(pref),"missing_skills":sorted(required-skills),"authorization_match":auth_match,"open_to_work":otw})
     return sorted(out,key=lambda x:(x["score"],x["base_match"]),reverse=True)
 @app.post("/api/approvals")
 def create_approval(payload:dict):
