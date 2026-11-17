@@ -89,7 +89,7 @@ Cloud-hosted recruiter-assist application for US IT staffing. The product is bei
 - Prevent duplicate active submissions for the same candidate, client, and job.
 - Recru Agent does not email or transmit candidate profiles to clients automatically.
 
-## Milestone 9: Interview Management (in development)
+## Milestone 9: Interview Management
 
 - Schedule interview rounds only after a client has requested an interview for a manually submitted profile.
 - Track round, date/time, time zone, format, meeting link/location, interviewer names, and candidate confirmation.
@@ -142,4 +142,4 @@ No login, role-based access control, tenant isolation, managed persistent databa
 11. Recruiter Productivity Dashboard
 12. Security, Quality and Release
 
-Milestone 1 development implementation is complete; its runtime verification and test/sign-off remain deferred. Milestone 2 development implementation is complete; runtime verification and testing remain deferred. Milestone 3 development implementation is complete; runtime verification and testing remain deferred. Milestone 4 development implementation is complete; runtime verification and testing remain deferred. Milestone 5 development implementation is complete; runtime verification and testing remain deferred. Milestone 6 development implementation is complete; runtime verification and testing remain deferred. Milestone 7 development implementation is complete; runtime verification and testing remain deferred. Milestone 8 development implementation is complete; runtime verification and testing remain deferred. Milestone 9 is under development.
+Milestone 1 development implementation is complete; its runtime verification and test/sign-off remain deferred. Milestone 2 development implementation is complete; runtime verification and testing remain deferred. Milestone 3 development implementation is complete; runtime verification and testing remain deferred. Milestone 4 development implementation is complete; runtime verification and testing remain deferred. Milestone 5 development implementation is complete; runtime verification and testing remain deferred. Milestone 6 development implementation is complete; runtime verification and testing remain deferred. Milestone 7 development implementation is complete; runtime verification and testing remain deferred. Milestone 8 development implementation is complete; runtime verification and testing remain deferred. Milestone 9 development implementation is complete; runtime verification and testing remain deferred.
