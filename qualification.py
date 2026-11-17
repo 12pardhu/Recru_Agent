@@ -113,7 +113,7 @@ def evaluate(job,candidate):
     availability=candidate.get("availability_signal") or "Unknown"
     criteria.append({"criterion":"Candidate-reported availability","status":"Informational","required":"Candidate confirmation","candidate_value":availability,"evidence":"Open to Work is a profile signal only; confirm interest and availability directly."})
 
-    hard=[x for x in criteria if x["criterion"] in ("Total experience","Mandatory skills","Work authorization","C2C availability")]
+    hard=[x for x in criteria if x["criterion"] in ("Total experience","Mandatory skills","Work authorization","C2C availability","Employment type")]
     if any(x["status"] in ("Does not meet","Potential blocker — verify") for x in hard):
         overall="Potential blocker — recruiter decision required"
     elif any(x["status"] in ("Unknown","Partial match","Needs recruiter review","Potential match — verify") for x in criteria):
