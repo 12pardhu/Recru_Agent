@@ -39,7 +39,7 @@ async function loadQualifications(){
  try{const qs=await api('/qualification/jobs/'+id);
  $('#qualificationList').innerHTML=table(['Candidate','Overall assessment','Criteria and evidence','Source evidence','Recruiter decision','Notes','Action'],qs.map(x=>{
    const result=JSON.parse(x.result_json||'{}');
-   const summary=(result.criteria||[]).map(z=>z.criterion+': '+z.status+' ('+(z.evidence||'')+')').join(' | '); const source=(result.provenance?.source_type||'Unknown')+' · '+(result.provenance?.source_evidence||'No source notes recorded');
+   const summary=(result.criteria||[]).map(z=>z.criterion+': '+z.status+' ('+(z.evidence||'')+')').join(' | '); const source=(result.provenance?.source_type||'Unknown')+' · '+(result.provenance?.source_url||'No source URL')+' · '+(result.provenance?.source_evidence||'No source notes recorded')+(result.provenance?.resume_attached?' · Resume attached':'');
    const choices=['Pending','Proceed to Screening','Hold','Not a Fit','Needs More Information'];
    return '<tr><td>'+esc(x.candidate_name)+'</td><td>'+esc(x.overall_status)+'</td><td>'+esc(summary)+'</td><td>'+esc(source)+'</td><td><select id="qdecision-'+x.id+'">'+choices.map(v=>'<option '+(v===x.recruiter_decision?'selected':'')+'>'+v+'</option>').join('')+'</select></td><td><input id="qnotes-'+x.id+'" value="'+esc(x.recruiter_notes||'')+'"></td><td><button type="button" onclick="saveQualification('+x.id+')">Save review</button></td></tr>';
  }));
