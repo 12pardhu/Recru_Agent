@@ -30,7 +30,7 @@ SKILLS = ["Java","Spring Boot","Microservices","REST API","SQL","PostgreSQL","Py
 
 def section(text, headings):
     names = "|".join(re.escape(x) for x in headings)
-    stop = r"(?:preferred(?: skills)?|optional(?: skills)?|responsibilities|what you'll do|what you will do|job duties|qualifications|requirements|experience|locations?|location preference|work authorization|employment type|rate|compensation)"
+    stop = r"(?:preferred(?: skills)?|optional(?: skills)?|responsibilities|what you'll do|what you will do|job duties|qualifications|requirements|experience|locations?|location preference|work authorization|employment type|rate|compensation|education|certifications?|travel|relocation)"
     m = re.search(r"(?ims)^\s*(?:" + names + r")\s*:?\s*(.*?)(?=^\s*" + stop + r"\s*:?\s*$|\Z)", text)
     return m.group(1).strip() if m else ""
 
@@ -74,13 +74,16 @@ def analyze(text):
 
     mandatory_text = section(text, ["mandatory skills","mandatory","required skills","required qualifications","must have","must-have"])
     preferred_text = section(text, ["preferred skills","preferred","nice to have","nice-to-have","good to have"])
+    optional_text = section(text, ["optional skills","optional"])
     def find_skills(source):
         return [s for s in SKILLS if re.search(r"(?<![\w])"+re.escape(s)+r"(?![\w])", source, re.I)]
     mandatory = find_skills(mandatory_text) if mandatory_text else []
     preferred = find_skills(preferred_text) if preferred_text else []
+    optional = find_skills(optional_text) if optional_text else []
     if not mandatory_text and not preferred_text:
         mandatory = find_skills(text)
-    mandatory = [s for s in mandatory if s.lower() not in {p.lower() for p in preferred}]
+    mandatory = [s for s in mandatory if s.lower() not in {p.lower() for p in preferred + optional}]
+    preferred = [s for s in preferred if s.lower() not in {o.lower() for o in optional}]
 
     auth_terms = ["STEM OPT","OPT","H-1B","Green Card","US Citizen","EAD"]
     auth = [x for x in auth_terms if re.search(re.escape(x), text, re.I)]
@@ -90,15 +93,23 @@ def analyze(text):
     arrangements = [x for x in ["Remote","Hybrid","Onsite","On-site"] if re.search(r"\b"+re.escape(x)+r"\b",text,re.I)]
     domain = next((d for d, keys in [("AI/ML",["machine learning","deep learning","ai/ml","llm","genai"]),("Data Engineering",["data engineer","spark","kafka","databricks"]),("Cloud/DevOps",["devops engineer","cloud engineer","terraform"]),("QA/Testing",["qa engineer","quality assurance","automation testing"]),("Cybersecurity",["cybersecurity","security engineer"]),("Software Engineering",["software engineer","developer","java","python"])] if any(k in low for k in keys)), "General IT")
     responsibilities = section(text, ["responsibilities","what you'll do","what you will do","job duties"])
+    education = section(text, ["education","education requirements"])
+    certifications = section(text, ["certifications","certification requirements"])
+    travel = re.search(r"[^\n]*(?:travel|travel requirement)[^\n]*", text, re.I)
+    relocation = re.search(r"[^\n]*(?:relocation|relocate)[^\n]*", text, re.I)
+    tech_versions = {}
+    for skill in SKILLS:
+        version = re.search(re.escape(skill)+r"\s*(?:version)?\s*(\d+(?:\.\d+)+)", text, re.I)
+        if version: tech_versions[skill] = version.group(1)
     fields = {
       "title":title,"domain":domain,"locations":locations,
       "min_experience":int(total.group(1)) if total else None,
       "relevant_experience":int(relevant.group(1)) if relevant else None,
       "technology_experience":tech_years,
-      "mandatory_skills":mandatory,"preferred_skills":preferred,
+      "mandatory_skills":mandatory,"preferred_skills":preferred,"optional_skills":optional,"technology_versions":tech_versions,
       "work_authorization":auth,"employment_type":employment or ["Unknown"],
       "rate":rate.group(1).strip() if rate else "",
-      "work_arrangement":arrangements,"responsibilities":responsibilities
+      "work_arrangement":arrangements,"responsibilities":responsibilities,"education":education,"certifications":certifications,"travel":travel.group(0).strip() if travel else "","relocation":relocation.group(0).strip() if relocation else ""
     }
     evidence = {}
     employment_conflict = {"C2C","W2"}.issubset(set(employment))
