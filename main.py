@@ -46,13 +46,13 @@ def extract_jd(text):
     exp=re.search(r"(\d+)\s*\+?\s*(?:years|yrs)",low)
     loc=[]
     # Preserve every city/state pair from a labelled location line.
-    m=re.search(r"^\\s*locations?\\s*[:\\-]\\s*(.+?)\\s*$",text,re.I|re.M)
+    m=re.search(r"^\s*locations?\s*[:\-]\s*(.+?)\s*$",text,re.I|re.M)
     if m:
         raw_location=m.group(1).strip()
-        normalized=re.sub(r"\\s*(?:/|\\||;|\\band\\b)\\s*","; ",raw_location,flags=re.I)
+        normalized=re.sub(r"\s*(?:/|\||;|\band\b)\s*","; ",raw_location,flags=re.I)
         loc=[x.strip(" ,") for x in normalized.split(";") if x.strip(" ,")]
     else:
-        m=re.search(r"based in\\s+([^\\n]+)",text,re.I)
+        m=re.search(r"based in\s+([^\n]+)",text,re.I)
         if m: loc=[m.group(1).strip()]
     auth=next((x for x in ["STEM OPT","OPT","H-1B","Green Card","US Citizen"] if x.lower() in low),"Unknown")
     # Cloud keywords alone (for example AWS) must not override a software developer role.
