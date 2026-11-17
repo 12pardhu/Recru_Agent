@@ -32,7 +32,7 @@ SKILLS = ["Java","Spring Boot","Microservices","REST API","SQL","PostgreSQL","Py
 def section(text, headings):
     names = "|".join(re.escape(x) for x in headings)
     stop = r"(?:preferred(?: skills)?|optional(?: skills)?|responsibilities|what you'll do|what you will do|job duties|qualifications|requirements|experience|locations?|location preference|work authorization|employment type|rate|compensation|education|certifications?|travel|relocation)"
-    m = re.search(r"(?ims)^\s*(?:" + names + r")\s*:?\s*(.*?)(?=^\s*" + stop + r"\s*:?\s*$|\Z)", text)
+    m = re.search(r"(?ims)^[ \t]*(?:" + names + r")[ \t]*:?[ \t]*(.*?)(?=^[ \t]*(?:" + stop + r")[ \t]*:?[ \t]*$|\Z)", text)
     return m.group(1).strip() if m else ""
 
 def first_evidence(text, terms):
