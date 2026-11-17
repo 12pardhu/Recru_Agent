@@ -65,6 +65,7 @@ loadScreeningSessions().catch(e=>console.warn(e));
 loadSubmissionData().catch(e=>console.warn(e));
 loadInterviewData().catch(e=>console.warn(e));
 loadPipelineData().catch(e=>console.warn(e));
+loadProductivityData().catch(e=>console.warn(e));
 }
 async function loadQualifications(){
  const id=$('#qualificationJob').value;if(!id)return;
@@ -151,6 +152,25 @@ $('#createInterview').onclick=async()=>{const submission_id=Number($('#interview
 $('#saveInterviewDetails').onclick=async()=>{const id=$('#interviewSelect').value;if(!id)return;try{const r=await api('/interviews/'+id,{method:'PATCH',body:JSON.stringify({round_number:Number($('#interviewEditRound').value||1),round_name:$('#interviewEditRoundName').value,scheduled_at:$('#interviewEditScheduled').value,timezone:$('#interviewEditTimezone').value,format:$('#interviewEditFormat').value,meeting_link:$('#interviewEditLink').value,meeting_location:$('#interviewEditLocation').value,interviewer_names:$('#interviewEditers').value,candidate_confirmation:$('#interviewCandidateConfirm').value})});$('#interviewMessage').textContent=r.message;await loadInterviewData();await loadInterview()}catch(e){$('#interviewMessage').textContent=e.message}};
 $('#saveInterviewStatus').onclick=async()=>{const id=$('#interviewSelect').value;if(!id)return;try{const r=await api('/interviews/'+id+'/status',{method:'PATCH',body:JSON.stringify({status:$('#interviewStatus').value})});$('#interviewMessage').textContent='Interview status updated: '+r.status;await loadInterviewData();await loadInterview()}catch(e){$('#interviewMessage').textContent=e.message}};
 $('#saveInterviewFeedback').onclick=async()=>{const id=$('#interviewSelect').value;if(!id)return;try{const r=await api('/interviews/'+id+'/feedback',{method:'POST',body:JSON.stringify({outcome:$('#interviewOutcome').value,feedback:$('#interviewFeedback').value})});$('#interviewMessage').textContent='Interview feedback saved: '+r.outcome;await loadInterviewData();await loadInterview()}catch(e){$('#interviewMessage').textContent=e.message}};
+async function loadProductivityData(){
+ try{
+  const days=Number($('#productivityPeriod').value||30);
+  const d=await api('/productivity/overview?period_days='+days);
+  const labels={new_jobs:'New job requirements',new_candidates:'New candidates',sourcing_tasks:'Sourcing tasks created',pending_approvals:'Pending approvals',active_pipeline:'Active / waiting pipeline',completed_screenings:'Completed screenings',client_submissions:'Client submissions',interviews:'Interviews scheduled'};
+  $('#productivityKpis').innerHTML=Object.entries(labels).map(([k,label])=>'<div class="stat">'+esc(label)+'<b>'+Number(d.counts[k]||0)+'</b></div>').join('');
+  $('#productivityStages').innerHTML=table(['Pipeline stage','Records'],(d.pipeline_stages||[]).map(x=>'<tr><td>'+esc(x.stage)+'</td><td>'+Number(x.count)+'</td></tr>'));
+  $('#productivityWorkload').innerHTML=table(['Owner','Total records','Open records'],(d.recruiter_workload||[]).map(x=>'<tr><td>'+esc(x.owner)+'</td><td>'+Number(x.records)+'</td><td>'+Number(x.open_records)+'</td></tr>'));
+  $('#productivityDecisions').innerHTML=table(['Recruiter decision','Count'],(d.qualification_decisions||[]).map(x=>'<tr><td>'+esc(x.decision)+'</td><td>'+Number(x.count)+'</td></tr>'));
+  const actionRows=a=>a.map(x=>'<tr><td>'+esc(x.candidate_name)+'</td><td>'+esc(x.job_title)+'</td><td>'+esc(x.current_stage)+'</td><td>'+esc(x.owner||'Unassigned')+'</td><td>'+esc(x.next_action)+'</td><td>'+esc(x.due_at)+'</td></tr>');
+  $('#productivityOverdue').innerHTML=table(['Candidate','Job','Stage','Owner','Next action','Due'],actionRows(d.overdue_actions||[]));
+  $('#productivityUpcoming').innerHTML=table(['Candidate','Job','Stage','Owner','Next action','Due'],actionRows(d.upcoming_actions||[]));
+  $('#productivitySourcing').innerHTML=table(['Job','Status','Candidates / target','Created'],(d.sourcing_recent||[]).map(x=>'<tr><td>'+esc(x.job_title)+'</td><td>'+esc(x.status)+'</td><td>'+Number(x.candidates_added)+' / '+Number(x.target_count)+'</td><td>'+esc(x.created_at)+'</td></tr>'));
+  $('#productivitySubmissions').innerHTML=table(['Submission status','Count'],(d.submission_statuses||[]).map(x=>'<tr><td>'+esc(x.status)+'</td><td>'+Number(x.count)+'</td></tr>'));
+  $('#productivityActivity').innerHTML=table(['Area','Activity','Candidate','Job','Details','Time'],(d.recent_activity||[]).map(x=>'<tr><td>'+esc(x.category)+'</td><td>'+esc(x.event_type)+'</td><td>'+esc(x.person||'—')+'</td><td>'+esc(x.role||'—')+'</td><td>'+esc(x.details||'')+'</td><td>'+esc(x.created_at)+'</td></tr>'));
+  $('#productivityMessage').textContent='Updated '+new Date(d.generated_at).toLocaleString()+' · Reporting period: '+days+' days.';
+ }catch(e){$('#productivityMessage').textContent='Dashboard data unavailable: '+e.message}
+}
+$('#productivityPeriod').onchange=()=>loadProductivityData();
 async function loadPipelineData(){
  try{
   const items=await api('/pipeline'); pipelineItems=items;
