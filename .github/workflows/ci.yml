@@ -1,0 +1,48 @@
+name: Recru Agent CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, feature/m1-jd-intelligence]
+
+jobs:
+  backend-smoke:
+    runs-on: ubuntu-latest
+    env:
+      ADMIN_USERNAME: ci-admin
+      ADMIN_PASSWORD: CI-only-password-12345
+      SESSION_SECRET: ci-only-session-secret-which-is-long-enough-123456
+      AUTH_COOKIE_SECURE: "false"
+      DATA_DIR: ${{ runner.temp }}/recru-agent-ci-data
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Compile Python modules
+        run: python -m compileall -q .
+      - name: Import application and verify critical routes
+        run: |
+          python - <<'PY'
+          import main
+          paths = {route.path for route in main.app.routes}
+          required = {
+              "/", "/api/health", "/api/auth/login", "/api/auth/me",
+              "/api/jd/drafts", "/api/resumes/drafts",
+              "/api/qualification", "/api/screening/sessions",
+              "/api/communications/drafts", "/api/submissions/drafts",
+              "/api/interviews", "/api/pipeline", "/api/productivity/overview",
+              "/api/privacy/requests",
+          }
+          missing = sorted(required - paths)
+          if missing:
+              raise SystemExit("Missing required routes: " + ", ".join(missing))
+          print(f"Application import succeeded; {len(paths)} routes registered.")
+          PY
