@@ -31,9 +31,12 @@ const opts=j.map(x=>'<option value="'+x.id+'">'+esc(x.title)+' — '+esc(x.locat
 const taskOpts=t.map(x=>'<option value="'+x.id+'">#'+x.id+' · '+esc(x.job_title)+' · '+x.added_count+'/'+x.target_count+'</option>').join('');
 const currentTask=$('#sourceTaskControl').value;$('#sourceTaskControl').innerHTML=taskOpts;if(t.some(x=>String(x.id)===currentTask))$('#sourceTaskControl').value=currentTask;else if(t.length)$('#sourceTaskControl').value=t[0].id;
 $('#candidateSourcingTask').innerHTML='<option value="">Manual / not linked</option>'+taskOpts;
+$('#communicationCandidate').innerHTML=p.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' — '+esc(x.location)+'</option>').join('');
+$('#communicationJob').innerHTML='<option value="">General / no job selected</option>'+opts;
 $('#approvalList').innerHTML=table(['Candidate','Job','Status','Notes','Action'],a.map(x=>'<tr><td>'+esc(x.candidate_name)+'</td><td>'+esc(x.job_title)+'</td><td>'+esc(x.status)+'</td><td>'+esc(x.notes)+'</td><td>'+(x.status==='Pending'?'<button onclick="decision('+x.id+',\'Approved\')">Approve</button> <button onclick="decision('+x.id+',\'Rejected\')">Reject</button>':'—')+'</td></tr>'));
 $('#sourceHistory').innerHTML=table(['Job','Progress','Status','Notes','Created'],t.map(x=>'<tr><td>'+esc(x.job_title)+'</td><td>'+x.added_count+'/'+x.target_count+'</td><td>'+esc(x.status)+'</td><td>'+esc(x.notes||'')+'</td><td>'+esc(x.created_at)+'</td></tr>'));
 if(t.length) loadSourcingTask().catch(e=>console.warn(e));
+loadCommunicationMessages().catch(e=>console.warn(e));
 }
 async function loadQualifications(){
  const id=$('#qualificationJob').value;if(!id)return;
@@ -77,6 +80,37 @@ $('#runMatch').onclick=async()=>{const id=$('#matchJob').value;if(!id)return ale
 window.makeApproval=async candidate_id=>{try{await api('/approvals',{method:'POST',body:JSON.stringify({candidate_id,job_id:Number($('#matchJob').value)})});await refresh();alert('Added to approval queue.')}catch(e){alert(e.message)}};
 window.decision=async(id,status)=>{try{await api('/approvals/'+id,{method:'PATCH',body:JSON.stringify({status})});await refresh()}catch(e){alert(e.message)}};
 
+let communicationTemplates=[];
+async function loadCommunicationTemplates(){
+ communicationTemplates=await api('/communications/templates');
+ renderCommunicationTemplates();
+}
+function renderCommunicationTemplates(){
+ const channel=$('#communicationChannel').value;
+ const available=communicationTemplates.filter(t=>t.channel==='Any'||t.channel===channel);
+ $('#communicationTemplate').innerHTML=available.map(t=>'<option value="'+t.id+'">'+esc(t.name)+'</option>').join('');
+}
+async function loadCommunicationMessages(){
+ try{const ms=await api('/communications/messages');
+ $('#communicationList').innerHTML=table(['Candidate','Job','Channel','Status','Created','Actions'],ms.map(m=>{
+  let actions='';
+  if(m.status==='Draft') actions='<button type="button" onclick="editCommunication('+m.id+')">Edit</button> <button type="button" onclick="submitCommunication('+m.id+')">Submit for approval</button>';
+  if(m.status==='Pending Approval') actions='<button type="button" onclick="approveCommunication('+m.id+')">Approve</button>';
+  if(m.status==='Approved') actions='<button type="button" onclick="markCommunicationSent('+m.id+')">Record manually sent</button>';
+  if(!['Manually Sent','Cancelled'].includes(m.status)) actions+=' <button type="button" onclick="cancelCommunication('+m.id+')">Cancel</button>';
+  return '<tr><td>'+esc(m.candidate_name)+'</td><td>'+esc(m.job_title||'General')+'</td><td>'+esc(m.channel)+'</td><td>'+esc(m.status)+'</td><td>'+esc(m.created_at)+'</td><td>'+actions+'</td></tr>';
+ }));
+ }catch(e){$('#communicationMessage').textContent=e.message}
+}
+window.editCommunication=async id=>{try{const m=await api('/communications/messages/'+id);$('#communicationDraftId').value=id;$('#communicationSubject').value=m.subject||'';$('#communicationBody').value=m.body||'';$('#communicationEditor').classList.remove('hidden');$('#communicationMessage').textContent='Editing message draft for '+m.candidate_name+'.'}catch(e){alert(e.message)}};
+window.submitCommunication=async id=>{try{await api('/communications/messages/'+id+'/submit-for-approval',{method:'POST',body:JSON.stringify({})});$('#communicationMessage').textContent='Submitted for human approval. Nothing has been sent.';await loadCommunicationMessages()}catch(e){$('#communicationMessage').textContent=e.message}};
+window.approveCommunication=async id=>{try{await api('/communications/messages/'+id+'/approve',{method:'POST',body:JSON.stringify({approver:'Recruiter'})});$('#communicationMessage').textContent='Approved. Nothing has been sent.';await loadCommunicationMessages()}catch(e){$('#communicationMessage').textContent=e.message}};
+window.markCommunicationSent=async id=>{try{await api('/communications/messages/'+id+'/mark-manually-sent',{method:'POST',body:JSON.stringify({confirmed_manual_send:true})});$('#communicationMessage').textContent='Manual send recorded. Recru Agent did not send the message.';await loadCommunicationMessages()}catch(e){$('#communicationMessage').textContent=e.message}};
+window.cancelCommunication=async id=>{try{await api('/communications/messages/'+id+'/cancel',{method:'POST'});await loadCommunicationMessages()}catch(e){alert(e.message)}};
+$('#communicationChannel').onchange=renderCommunicationTemplates;
+$('#createCommunicationDraft').onclick=async()=>{const candidate_id=Number($('#communicationCandidate').value);if(!candidate_id)return alert('Add a candidate first.');const template_id=Number($('#communicationTemplate').value);if(!template_id)return alert('Choose a communication template.');try{const d=await api('/communications/drafts',{method:'POST',body:JSON.stringify({candidate_id,job_id:$('#communicationJob').value?Number($('#communicationJob').value):null,template_id,channel:$('#communicationChannel').value})});$('#communicationDraftId').value=d.id;$('#communicationSubject').value=d.subject;$('#communicationBody').value=d.body;$('#communicationEditor').classList.remove('hidden');$('#communicationMessage').textContent=d.message;await loadCommunicationMessages()}catch(e){$('#communicationMessage').textContent=e.message}};
+$('#saveCommunicationDraft').onclick=async()=>{const id=$('#communicationDraftId').value;if(!id)return;try{const r=await api('/communications/messages/'+id,{method:'PATCH',body:JSON.stringify({subject:$('#communicationSubject').value,body:$('#communicationBody').value})});$('#communicationMessage').textContent=r.message;await loadCommunicationMessages()}catch(e){$('#communicationMessage').textContent=e.message}};
+$('#submitCommunicationApproval').onclick=async()=>{const id=$('#communicationDraftId').value;if(!id)return;try{await api('/communications/messages/'+id,{method:'PATCH',body:JSON.stringify({subject:$('#communicationSubject').value,body:$('#communicationBody').value})});await submitCommunication(Number(id));$('#communicationEditor').classList.add('hidden')}catch(e){$('#communicationMessage').textContent=e.message}};
 let activeJdDraft = null;
 const splitList = s => s.split(/[,;\n]/).map(x=>x.trim()).filter(Boolean);
 
@@ -130,5 +164,6 @@ $('#jdSaveEdits').onclick=async()=>{try{const d=await saveJdReview();showJdDraft
 $('#jdConfirm').onclick=async()=>{try{const q=await runJdQuality();if(!q.ready_to_confirm)return;if((q.warnings||[]).length&&!$('#jdAcknowledgeWarnings').checked){$('#jdDraftMessage').textContent='Please review the warnings and tick the acknowledgement before confirming.';return;}const r=await api('/jd/drafts/'+activeJdDraft+'/confirm',{method:'POST',body:JSON.stringify({acknowledge_warnings:$('#jdAcknowledgeWarnings').checked})});$('#jdDraftMessage').textContent=r.message+' Job ID: '+r.job_id+'. You can now prepare sourcing from Candidate Sourcing.';$('#jdReview').classList.add('hidden');await refresh()}catch(e){$('#jdDraftMessage').textContent=e.message}};
 
 refreshJdDrafts();
+loadCommunicationTemplates().catch(e=>console.warn(e));
 refresh().catch(e=>console.error(e));
 </script></body></html>
