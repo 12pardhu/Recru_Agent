@@ -418,7 +418,7 @@ async function showAuthenticatedApp(user){
  document.querySelector('[data-tab="security"]').classList.remove('hidden');
  if(user.role==='admin'){loadSecurityData().catch(e=>console.warn(e))}
  else {['userAdminPanel','auditPanel','privacyAdminPanel','releaseSafeguards'].forEach(id=>$('#'+id).classList.add('hidden'))}
- refreshJdDrafts();loadCommunicationTemplates().catch(e=>console.warn(e));refresh().catch(e=>console.error(e));
+ refreshJdDrafts();refreshIntakes().catch(e=>console.warn(e));loadCommunicationTemplates().catch(e=>console.warn(e));refresh().catch(e=>console.error(e));
 }
 async function bootstrapAuth(){
  $('#loginView').classList.remove('hidden');
