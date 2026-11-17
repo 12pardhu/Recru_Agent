@@ -93,6 +93,7 @@ def analyze(text):
     if "STEM OPT" in auth and "OPT" in auth: auth.remove("OPT")
     employment_terms = ["C2C","W2","Contract-to-Hire","Full-time","1099","Contract"]
     employment = [x for x in employment_terms if re.search(r"\b"+re.escape(x)+r"\b",text,re.I)]
+    if "Contract-to-Hire" in employment and "Contract" in employment: employment.remove("Contract")
     rate = re.search(r"(?:rate|pay|compensation|salary)\s*[:\-]?\s*([^\n]+)", text, re.I)
     arrangements = [x for x in ["Remote","Hybrid","Onsite","On-site"] if re.search(r"\b"+re.escape(x)+r"\b",text,re.I)]
     domain = next((d for d, keys in [("AI/ML",["machine learning","deep learning","ai/ml","llm","genai"]),("Data Engineering",["data engineer","spark","kafka","databricks"]),("Cloud/DevOps",["devops engineer","cloud engineer","terraform"]),("QA/Testing",["qa engineer","quality assurance","automation testing"]),("Cybersecurity",["cybersecurity","security engineer"]),("Software Engineering",["software engineer","developer","java","python"])] if any(k in low for k in keys)), "General IT")
