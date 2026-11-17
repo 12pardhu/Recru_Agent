@@ -23,11 +23,14 @@ def init():
         CREATE TABLE IF NOT EXISTS candidates(id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT DEFAULT '', location TEXT DEFAULT '', experience REAL DEFAULT 0, skills TEXT DEFAULT '', work_auth TEXT DEFAULT 'Unknown', c2c_status TEXT DEFAULT 'Unknown', linkedin_url TEXT DEFAULT '', resume_text TEXT DEFAULT '', created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS approvals(id INTEGER PRIMARY KEY, candidate_id INTEGER NOT NULL, job_id INTEGER NOT NULL, status TEXT DEFAULT 'Pending', notes TEXT DEFAULT '', created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS sourcing_tasks(id INTEGER PRIMARY KEY, job_id INTEGER NOT NULL, mode TEXT NOT NULL, query_text TEXT NOT NULL, linkedin_url TEXT NOT NULL, status TEXT DEFAULT 'Prepared', created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS sourcing_searches(id INTEGER PRIMARY KEY, task_id INTEGER NOT NULL, location TEXT DEFAULT '', query_text TEXT NOT NULL, linkedin_url TEXT NOT NULL, status TEXT DEFAULT 'Prepared', created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS sourcing_events(id INTEGER PRIMARY KEY, task_id INTEGER NOT NULL, event_type TEXT NOT NULL, details TEXT DEFAULT '', created_at TEXT NOT NULL);
         """)
         migrations={
           "jobs":{"domain":"TEXT DEFAULT ''","preferred_skills":"TEXT DEFAULT ''","employment_type":"TEXT DEFAULT 'Unknown'","source_mode":"TEXT DEFAULT 'both'"},
-          "candidates":{"open_to_work":"TEXT DEFAULT 'Unknown'","availability_signal":"TEXT DEFAULT 'Unknown'","profile_updated":"TEXT DEFAULT ''","source_type":"TEXT DEFAULT 'Manual'","source_url":"TEXT DEFAULT ''","source_evidence":"TEXT DEFAULT ''","c2c_confirmed":"TEXT DEFAULT 'Unknown'"}
+          "candidates":{"open_to_work":"TEXT DEFAULT 'Unknown'","availability_signal":"TEXT DEFAULT 'Unknown'","profile_updated":"TEXT DEFAULT ''","source_type":"TEXT DEFAULT 'Manual'","source_url":"TEXT DEFAULT ''","source_evidence":"TEXT DEFAULT ''","c2c_confirmed":"TEXT DEFAULT 'Unknown'","sourcing_task_id":"INTEGER"}
         }
+        migrations["sourcing_tasks"]={"target_count":"INTEGER DEFAULT 50","notes":"TEXT DEFAULT ''","started_at":"TEXT DEFAULT ''","completed_at":"TEXT DEFAULT ''"}
         for table,cols in migrations.items():
             existing={r["name"] for r in c.execute(f"PRAGMA table_info({table})")}
             for name,definition in cols.items():
