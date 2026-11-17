@@ -138,11 +138,12 @@ def create_request(payload:PrivacyRequestCreate,request:Request):
 @router.patch("/requests/{request_id}")
 def update_request(request_id:int,payload:PrivacyRequestUpdate,request:Request):
     require_admin(request)
-    if payload.status not in ("Pending","In Review","Approved","Rejected"):
+    if payload.status not in ("Pending","In Review","Approved","Rejected","Completed"):
         raise HTTPException(400,"Choose Pending, In Review, Approved, or Rejected. Deletion requests are completed only after the erase action.")
     with connect() as c:
-        row=c.execute("SELECT id FROM privacy_requests WHERE id=?",(request_id,)).fetchone()
+        row=c.execute("SELECT id,request_type FROM privacy_requests WHERE id=?",(request_id,)).fetchone()
         if not row: raise HTTPException(404,"Privacy request not found.")
+        if row["request_type"]=="Deletion" and payload.status=="Completed": raise HTTPException(409,"Deletion requests can be completed only through the approved erase action.")
         c.execute("UPDATE privacy_requests SET status=?,updated_at=?,resolved_by=?,resolution_notes=? WHERE id=?",
           (payload.status,stamp(),request.state.user["username"],payload.resolution_notes,request_id))
     return {"id":request_id,"status":payload.status}
