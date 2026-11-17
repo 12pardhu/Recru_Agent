@@ -310,6 +310,35 @@ async function loadScreeningSessions(){
  }catch(e){$('#screeningMessage').textContent=e.message}
 }
 window.openScreeningSession=async id=>{$('#screenSession').value=id;await loadScreeningSession()};
+async function loadRtrRecord(){
+ if(!currentScreening)return;
+ const records=await api('/screening/sessions/'+currentScreening.id+'/rtr');
+ const r=records[0];
+ $('#rtrEditor').classList.toggle('hidden',!r);
+ $('#rtrStatus').textContent=r?'RTR: '+r.status+' · Client: '+(r.client_name||'—')+' · Vendor: '+(r.vendor_name||'—')+' · Expiry: '+(r.expires_at||'Not recorded'):'No RTR requirement recorded for this session.';
+ if(r){$('#rtrState').value=r.status;$('#rtrEvidence').value=r.evidence_reference||'';$('#rtrExpiry').value=r.expires_at?(new Date(r.expires_at)).toISOString().slice(0,16):'';$('#rtrUpdateNotes').value=r.notes||''}
+}
+$('#requestRtr').onclick=async()=>{
+ if(!currentScreening)return alert('Open a screening session first.');
+ try{await api('/screening/sessions/'+currentScreening.id+'/rtr',{method:'POST',body:JSON.stringify({client_name:$('#rtrClient').value,vendor_name:$('#rtrVendor').value,rate:$('#rtrRate').value,consent_text:$('#rtrConsentText').value,notes:$('#rtrNotes').value})});$('#rtrStatus').textContent='RTR requirement recorded for this candidate and job.';await loadRtrRecord()}catch(e){$('#rtrStatus').textContent=e.message}
+};
+$('#refreshRtr').onclick=()=>loadRtrRecord().catch(e=>$('#rtrStatus').textContent=e.message);
+$('#saveRtrState').onclick=async()=>{
+ if(!currentScreening)return;
+ const expiry=$('#rtrExpiry').value;
+ try{await api('/screening/sessions/'+currentScreening.id+'/rtr',{method:'PATCH',body:JSON.stringify({status:$('#rtrState').value,evidence_reference:$('#rtrEvidence').value,expires_at:expiry?new Date(expiry).toISOString():'',notes:$('#rtrUpdateNotes').value})});$('#rtrStatus').textContent='RTR status saved.';await loadRtrRecord()}catch(e){$('#rtrStatus').textContent=e.message}
+};
+$('#completeScreening').onclick=async()=>{
+ if(!currentScreening)return;
+ try{
+  await persistScreeningAnswers();
+  const applied=await api('/screening/sessions/'+currentScreening.id+'/apply-confirmed',{method:'POST'});
+  if(applied.submission_consent!=='Yes')throw Error('Cannot complete: explicit candidate-confirmed consent for this specific job is required.');
+  await api('/screening/sessions/'+currentScreening.id,{method:'PATCH',body:JSON.stringify({status:'Completed'})});
+  $('#screeningMessage').textContent='Screening completed. Candidate-confirmed answers applied. Submission remains blocked if required RTR is not signed and valid.';
+  await loadScreeningSessions();await loadScreeningSession();
+ }catch(e){$('#screeningMessage').textContent=e.message}
+};
 async function loadScreeningSession(){
  const id=$('#screenSession').value;if(!id)return;
  currentScreening=await api('/screening/sessions/'+id);
@@ -319,6 +348,7 @@ async function loadScreeningSession(){
  $('#screenNotes').value=currentScreening.recruiter_notes||'';
  $('#screenAnswers').innerHTML=currentScreening.answers.map(a=>'<div class="panel"><b>'+esc(a.category)+' — '+esc(a.question)+'</b><label>Candidate answer</label><textarea id="screen-answer-'+a.question_key+'">'+esc(a.answer||'')+'</textarea><div class="twocol"><div><label>Confirmation status</label><select id="screen-confirm-'+a.question_key+'"><option '+(a.confirmation_status==='Unknown'?'selected':'')+'>Unknown</option><option '+(a.confirmation_status==='Candidate confirmed'?'selected':'')+'>Candidate confirmed</option><option '+(a.confirmation_status==='Not confirmed'?'selected':'')+'>Not confirmed</option></select></div><div><label>Evidence / recruiter note</label><input id="screen-evidence-'+a.question_key+'" value="'+esc(a.evidence||'')+'"></div></div></div>').join('');
  $('#screenHistory').innerHTML=table(['Event','Details','Time'],(currentScreening.events||[]).map(e=>'<tr><td>'+esc(e.event_type)+'</td><td>'+esc(e.details)+'</td><td>'+esc(e.created_at)+'</td></tr>'));
+ await loadRtrRecord();
 }
 $('#screenSession').onchange=()=>loadScreeningSession().catch(e=>alert(e.message));
 $('#createScreening').onclick=async()=>{const candidate_id=Number($('#screenCandidate').value),job_id=Number($('#screenJob').value);if(!candidate_id||!job_id)return alert('Select a candidate and confirmed job.');try{const s=await api('/screening/sessions',{method:'POST',body:JSON.stringify({candidate_id,job_id,scheduled_at:$('#screenScheduled').value})});$('#screeningMessage').textContent=s.message;await loadScreeningSessions();$('#screenSession').value=s.id;await loadScreeningSession()}catch(e){$('#screeningMessage').textContent=e.message}};
