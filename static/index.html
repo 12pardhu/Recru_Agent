@@ -243,7 +243,7 @@ function showJdDraft(d){
  $('#rvRate').value=f.rate||''; $('#rvArrangement').value=Array.isArray(f.work_arrangement)?f.work_arrangement.join(', '):(f.work_arrangement||'');
  $('#rvResponsibilities').value=f.responsibilities||''; $('#rvEducation').value=f.education||''; $('#rvCertifications').value=f.certifications||''; $('#rvTravel').value=f.travel||''; $('#rvRelocation').value=f.relocation||''; $('#rvOriginal').value=d.jd_text||''; $('#jdReview').classList.remove('hidden');
  const ev=d.analysis.evidence||{};
- $('#jdEvidence').textContent='Field review status: '+Object.entries(ev).map(([k,v])=>k+': '+v.status).join(' | ');
+ $('#jdEvidence').innerHTML='<h3>Extraction evidence and review status</h3>'+table(['Field','Status','Evidence found in JD'],Object.entries(ev).map(([k,v])=>'<tr><td>'+esc(k.replaceAll('_',' '))+'</td><td>'+esc(v.status||'Needs review')+'</td><td>'+esc(v.evidence||'No supporting text found — please review manually')+'</td></tr>'));
  $('#jdDraftMessage').innerHTML='Draft created — '+esc(d.status)+'. Original file: '+esc(d.original_filename||'pasted text')+'. Review the extracted fields below.'+(d.stored_path?' <a href="/api/jd/drafts/'+encodeURIComponent(d.id)+'/document">Download original JD</a>':''); refreshJdDrafts();
 }
 function jdFields(){
