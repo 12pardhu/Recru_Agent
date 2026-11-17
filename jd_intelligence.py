@@ -97,11 +97,13 @@ def analyze(text):
       "work_arrangement":arrangements,"responsibilities":responsibilities
     }
     evidence = {}
+    employment_conflict = {"C2C","W2"}.issubset(set(employment))
     for key, value in fields.items():
         terms = value if isinstance(value,list) else list(value.keys()) if isinstance(value,dict) else [value] if value not in ("",None) else []
         snippet = first_evidence(text, terms)
         missing = value in ("",[],None,{}) or value == ["Unknown"] or value == "New Job Requirement"
-        evidence[key] = {"status":"Missing" if missing else "Needs review","evidence":snippet}
+        status = "Conflicting" if key == "employment_type" and employment_conflict else ("Missing" if missing else "Needs review")
+        evidence[key] = {"status":status,"evidence":snippet}
     return {"fields":fields,"evidence":evidence}
 
 def quality_report(text, fields):
@@ -182,6 +184,8 @@ def edit_draft(draft_id: str, payload: DraftEdit):
     d = read_draft(draft_id)
     if d["status"] == "Confirmed": raise HTTPException(409,"Confirmed requirements are immutable here. Create a new draft for changes.")
     analysis = d["analysis"]; analysis["fields"].update(payload.fields)
+    for key in payload.fields:
+        analysis.setdefault("evidence",{})[key] = {"status":"Recruiter edited","evidence":"Updated by recruiter during draft review"}
     for key in ("employment_type","work_arrangement","work_authorization","locations","mandatory_skills","preferred_skills"):
         value = analysis["fields"].get(key)
         if isinstance(value,str):
@@ -200,6 +204,10 @@ def confirm_draft(draft_id: str, payload: dict = None):
     d = read_draft(draft_id)
     if d["status"] == "Confirmed": return {"job_id":d["confirmed_job_id"],"message":"Already confirmed."}
     f = d["analysis"]["fields"]; report = quality_report(d["jd_text"],f)
+    for key in d["analysis"].get("evidence",{}):
+        d["analysis"]["evidence"][key]["status"] = "Recruiter confirmed"
+    with connect() as evidence_conn:
+        evidence_conn.execute("UPDATE jd_drafts SET extracted_json=? WHERE id=?",(json.dumps(d["analysis"]),draft_id))
     if not report["ready_to_confirm"]:
         raise HTTPException(400,{"message":"Resolve the blocking fields before confirming.","quality":report})
     if report["warnings"] and not (payload or {}).get("acknowledge_warnings"):
