@@ -29,6 +29,7 @@ def init():
           recruiter_decision TEXT NOT NULL DEFAULT 'Pending', recruiter_notes TEXT DEFAULT '',
           evaluated_at TEXT NOT NULL, updated_at TEXT NOT NULL
         )""")
+        c.execute("CREATE TABLE IF NOT EXISTS qualification_events(id INTEGER PRIMARY KEY, record_id INTEGER NOT NULL, event_type TEXT NOT NULL, details TEXT DEFAULT '', created_at TEXT NOT NULL)")
 init()
 
 def evaluate(job,candidate):
@@ -144,6 +145,7 @@ def evaluate_job_candidates(job_id:int):
             cur=c.execute("INSERT INTO qualification_records(job_id,candidate_id,result_json,overall_status,recruiter_decision,recruiter_notes,evaluated_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
               (job_id,candidate["id"],json.dumps(result),result["overall_status"],"Pending","",stamp(),stamp()))
             created.append(cur.lastrowid)
+            c.execute("INSERT INTO qualification_events(record_id,event_type,details,created_at) VALUES(?,?,?,?)",(cur.lastrowid,"Qualification generated",result["overall_status"],stamp()))
     return {"job_id":job_id,"evaluated_count":len(created),"message":"Qualification recommendations prepared. Every candidate requires recruiter review."}
 
 @router.get("/jobs/{job_id}")
@@ -162,6 +164,12 @@ def get_qualification(record_id:int):
     records[0]["result"]=json.loads(records[0].pop("result_json"))
     return records[0]
 
+@router.get("/{record_id}/history")
+def qualification_history(record_id:int):
+    if not rows("SELECT id FROM qualification_records WHERE id=?",(record_id,)):
+        raise HTTPException(404,"Qualification record not found.")
+    return rows("SELECT * FROM qualification_events WHERE record_id=? ORDER BY id DESC",(record_id,))
+
 @router.patch("/{record_id}")
 def update_qualification_review(record_id:int,payload:dict):
     decision=payload.get("recruiter_decision")
@@ -171,4 +179,5 @@ def update_qualification_review(record_id:int,payload:dict):
         cur=c.execute("UPDATE qualification_records SET recruiter_decision=?,recruiter_notes=?,updated_at=? WHERE id=?",
           (decision,str(payload.get("recruiter_notes","")),stamp(),record_id))
         if not cur.rowcount: raise HTTPException(404,"Qualification record not found.")
+        c.execute("INSERT INTO qualification_events(record_id,event_type,details,created_at) VALUES(?,?,?,?)",(record_id,"Recruiter decision saved",decision,stamp()))
     return {"id":record_id,"recruiter_decision":decision,"message":"Recruiter review saved."}
