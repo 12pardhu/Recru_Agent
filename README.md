@@ -1,6 +1,6 @@
 # Recru Agent
 
-Cloud-hosted recruiter-assist application for US IT staffing. The product is being developed in 12 milestones. The current development branch contains the completed development implementation for **Milestone 1 — Job Requirement Intelligence** **Milestone 2 — Candidate Sourcing Intelligence** **Milestone 3 — Resume Intelligence** **Milestone 4 — Candidate Qualification** **Milestone 5 — Candidate Communication** **Milestone 6 — OPT Recruiter Screening** and the in-progress **Milestone 7 — Advanced AI Matching**. Runtime verification and formal test/sign-off are intentionally deferred until all 12 development milestones are built.
+Cloud-hosted recruiter-assist application for US IT staffing. The product is being developed in 12 milestones. The current development branch contains the completed development implementation for **Milestone 1 — Job Requirement Intelligence** **Milestone 2 — Candidate Sourcing Intelligence** **Milestone 3 — Resume Intelligence** **Milestone 4 — Candidate Qualification** **Milestone 5 — Candidate Communication** **Milestone 6 — OPT Recruiter Screening** **Milestone 7 — Advanced AI Matching** and the in-progress **Milestone 8 — Client Submission Management**. Runtime verification and formal test/sign-off are intentionally deferred until all 12 development milestones are built.
 
 ## Milestone 1: Job Requirement Intelligence
 
@@ -80,6 +80,15 @@ Cloud-hosted recruiter-assist application for US IT staffing. The product is bei
 
 **Important:** this version uses deterministic, explainable rules; it is not a connected LLM and does not guarantee candidate suitability.
 
+## Milestone 8: Client Submission Management (in development)
+
+- Maintain client company and contact records.
+- Create a submission draft only after the job is confirmed, candidate screening is completed, explicit candidate consent is Yes for that role, and the recruiter qualification decision is “Proceed to Client Submission”.
+- Require a separate internal approval before a submission can be marked manually submitted.
+- Record client feedback, status changes, withdrawals, and activity history.
+- Prevent duplicate active submissions for the same candidate, client, and job.
+- Recru Agent does not email or transmit candidate profiles to clients automatically.
+
 ## Existing recruiter-assist features
 
 - Prepare LinkedIn People Search URLs for the recruiter to open in their authorized LinkedIn session.
@@ -123,4 +132,4 @@ No login, role-based access control, tenant isolation, managed persistent databa
 11. Recruiter Productivity Dashboard
 12. Security, Quality and Release
 
-Milestone 1 development implementation is complete; its runtime verification and test/sign-off remain deferred. Milestone 2 development implementation is complete; runtime verification and testing remain deferred. Milestone 3 development implementation is complete; runtime verification and testing remain deferred. Milestone 4 development implementation is complete; runtime verification and testing remain deferred. Milestone 5 development implementation is complete; runtime verification and testing remain deferred. Milestone 6 development implementation is complete; runtime verification and testing remain deferred. Milestone 7 is under development.
+Milestone 1 development implementation is complete; its runtime verification and test/sign-off remain deferred. Milestone 2 development implementation is complete; runtime verification and testing remain deferred. Milestone 3 development implementation is complete; runtime verification and testing remain deferred. Milestone 4 development implementation is complete; runtime verification and testing remain deferred. Milestone 5 development implementation is complete; runtime verification and testing remain deferred. Milestone 6 development implementation is complete; runtime verification and testing remain deferred. Milestone 7 development implementation is complete; runtime verification and testing remain deferred. Milestone 8 is under development.
