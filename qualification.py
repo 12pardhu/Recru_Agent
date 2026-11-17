@@ -173,7 +173,7 @@ def qualification_history(record_id:int):
 @router.patch("/{record_id}")
 def update_qualification_review(record_id:int,payload:dict):
     decision=payload.get("recruiter_decision")
-    allowed=("Pending","Proceed to Screening","Hold","Not a Fit","Needs More Information")
+    allowed=("Pending","Proceed to Screening","Proceed to Client Submission","Hold","Not a Fit","Needs More Information")
     if decision not in allowed: raise HTTPException(400,"Choose a valid recruiter review decision.")
     with connect() as c:
         cur=c.execute("UPDATE qualification_records SET recruiter_decision=?,recruiter_notes=?,updated_at=? WHERE id=?",
