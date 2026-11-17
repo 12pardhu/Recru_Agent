@@ -212,7 +212,7 @@ def quality_report(text, fields):
 def read_draft(draft_id):
     with connect() as c: row = c.execute("SELECT * FROM jd_drafts WHERE id=?", (draft_id,)).fetchone()
     if not row: raise HTTPException(404,"JD draft not found")
-    out = dict(row); out["analysis"] = json.loads(out.pop("extracted_json")); return out
+    out = dict(row); out["analysis"] = json.loads(out.pop("extracted_json")); out["has_original_document"] = bool(out.get("stored_path")); out.pop("stored_path", None); return out
 
 def save_draft(text, filename="", path=""):
     if not text.strip(): raise HTTPException(400,"No readable JD text found.")
@@ -263,13 +263,15 @@ def list_drafts():
 
 @router.get("/drafts/{draft_id}/document")
 def download_original_document(draft_id: str):
-    d = read_draft(draft_id)
-    if not d.get("stored_path"):
+    with connect() as conn:
+        row = conn.execute("SELECT stored_path,original_filename FROM jd_drafts WHERE id=?",(draft_id,)).fetchone()
+    if not row: raise HTTPException(404,"JD draft not found.")
+    if not row["stored_path"]:
         raise HTTPException(404,"This draft was created from pasted text; there is no uploaded original file.")
-    path = Path(d["stored_path"]).resolve()
+    path = Path(row["stored_path"]).resolve()
     if DOCS.resolve() not in path.parents or not path.is_file():
         raise HTTPException(404,"The original uploaded file is not available in this environment.")
-    return FileResponse(path, filename=d.get("original_filename") or path.name)
+    return FileResponse(path, filename=row["original_filename"] or path.name)
 
 @router.get("/drafts/{draft_id}")
 def get_draft(draft_id: str):
@@ -282,7 +284,7 @@ def edit_draft(draft_id: str, payload: DraftEdit):
     analysis = d["analysis"]; analysis["fields"].update(payload.fields)
     for key in payload.fields:
         analysis.setdefault("evidence",{})[key] = {"status":"Recruiter edited","evidence":"Updated by recruiter during draft review"}
-    for key in ("employment_type","work_arrangement","work_authorization","locations","mandatory_skills","preferred_skills"):
+    for key in ("employment_type","work_arrangement","work_authorization","locations","mandatory_skills","preferred_skills","optional_skills"):
         value = analysis["fields"].get(key)
         if isinstance(value,str):
             analysis["fields"][key] = [x.strip() for x in re.split(r"[,;]",value) if x.strip()]
