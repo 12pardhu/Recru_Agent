@@ -14,7 +14,7 @@ jobs:
       ADMIN_PASSWORD: CI-only-password-12345
       SESSION_SECRET: ci-only-session-secret-which-is-long-enough-123456
       AUTH_COOKIE_SECURE: "false"
-      DATA_DIR: ${{ runner.temp }}/recru-agent-ci-data
+      DATA_DIR: ./ci-data
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
