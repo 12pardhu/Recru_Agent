@@ -41,6 +41,7 @@ jobs:
               "/api/pipeline/", "/api/productivity/",
               "/api/privacy/", "/api/requirement-intake",
               "/api/platform-sourcing/",
+              "/api/communications/interactions",
           )
           missing = [prefix for prefix in required_prefixes
                      if not any(path.startswith(prefix) for path in paths)]
