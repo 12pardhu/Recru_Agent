@@ -93,8 +93,9 @@ Cloud-hosted recruiter-assist application for US IT staffing. The product is bei
 
 - Schedule interview rounds only after a client has requested an interview for a manually submitted profile.
 - Track round, date/time, time zone, format, meeting link/location, interviewer names, and candidate confirmation.
-- Support rescheduling, completion, cancellation, and no-show statuses.
-- Record interview feedback and outcomes (Strong Hire, Hire, No Hire, Maybe, Additional Round).
+- Validate future date/time values against an explicit IANA time zone and prevent duplicate active round numbers for the same submission.
+- Support rescheduling, completion through recorded feedback, cancellation, and no-show statuses; closed interviews cannot be reopened.
+- Record candidate confirmation, interviewer feedback, and outcomes (Strong Hire, Hire, No Hire, Maybe, Additional Round).
 - Maintain interview activity history.
 - Calendar invitations and participant notifications remain manual; no external calendar or email is sent automatically.
 
