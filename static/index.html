@@ -19,7 +19,7 @@
 </main>
 <script>
 const $=s=>document.querySelector(s), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-async function api(path,opts={}){const r=await fetch('/api'+path,{...opts,headers:{...(opts.headers||{}),...(opts.body instanceof FormData?{}:{'Content-Type':'application/json'})}});if(!r.ok){let e={};try{e=await r.json()}catch{}throw Error(e.detail||r.statusText)}return r.json()}
+async function api(path,opts={}){const r=await fetch('/api'+path,{...opts,headers:{...(opts.headers||{}),...(opts.body instanceof FormData?{}:{'Content-Type':'application/json'})}});if(!r.ok){let e={};try{e=await r.json()}catch{}const detail=typeof e.detail==='string'?e.detail:(e.detail&&e.detail.message?e.detail.message:JSON.stringify(e.detail||{}));throw Error(detail||r.statusText)}return r.json()}
 function table(h,rs){return '<table><thead><tr>'+h.map(x=>'<th>'+x+'</th>').join('')+'</tr></thead><tbody>'+(rs.length?rs.join(''):'<tr><td colspan="'+h.length+'">No records yet.</td></tr>')+'</tbody></table>'}
 let jobs=[],people=[],tasks=[];
 async function refresh(){const [d,j,p,a,t]=await Promise.all([api('/dashboard'),api('/jobs'),api('/candidates'),api('/approvals'),api('/sourcing')]);jobs=j;people=p;tasks=t;$('#jobCount').textContent=d.jobs;$('#candidateCount').textContent=d.candidates;$('#approvalCount').textContent=d.pending_approvals;$('#taskCount').textContent=d.sourcing_tasks;
