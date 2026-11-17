@@ -119,6 +119,7 @@ def add_candidate(p:CandidateIn):
             task=c.execute("SELECT id,status FROM sourcing_tasks WHERE id=?",(p.sourcing_task_id,)).fetchone()
             if not task: raise HTTPException(404,"Sourcing task not found.")
             if task["status"]=="Completed": raise HTTPException(409,"This sourcing task is completed. Reopen it before adding more candidates.")
+            if task["status"]=="Paused": raise HTTPException(409,"This sourcing task is paused. Resume it before adding candidates.")
         cur=c.execute("""INSERT INTO candidates(name,email,location,experience,skills,work_auth,c2c_status,linkedin_url,resume_text,created_at,open_to_work,availability_signal,profile_updated,source_type,source_url,source_evidence,c2c_confirmed,sourcing_task_id)
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(p.name,p.email,p.location,p.experience,p.skills,p.work_auth,p.c2c_status,p.linkedin_url,p.resume_text,now(),p.open_to_work,p.availability_signal,p.profile_updated,p.source_type,p.source_url,p.source_evidence,p.c2c_confirmed,p.sourcing_task_id))
         if p.sourcing_task_id:
