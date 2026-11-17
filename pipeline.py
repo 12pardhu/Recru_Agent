@@ -38,6 +38,7 @@ def init():
 init()
 
 def ensure_pipeline(candidate_id,job_id,stage="Sourcing"):
+    if stage not in STAGES: raise HTTPException(400,"Invalid recruitment pipeline stage.")
     existing=rows("SELECT id,current_stage FROM recruitment_pipeline WHERE candidate_id=? AND job_id=?",(candidate_id,job_id))
     if existing: return existing[0]["id"]
     with connect() as c:
@@ -55,17 +56,25 @@ def advance_pipeline(candidate_id,job_id,stage,details=""):
     if current in terminal: return pid
     order={s:i for i,s in enumerate(STAGES[:6])}
     if stage in order and current in order and order[stage]<order[current]: return pid
+    next_status = "Completed" if stage in terminal else "Active"
     with connect() as c:
-        c.execute("UPDATE recruitment_pipeline SET current_stage=?,stage_status='Active',updated_at=? WHERE id=?",(stage,stamp(),pid))
+        c.execute("UPDATE recruitment_pipeline SET current_stage=?,stage_status=?,updated_at=? WHERE id=?",(stage,next_status,stamp(),pid))
         c.execute("INSERT INTO pipeline_events(pipeline_id,event_type,details,created_at) VALUES(?,?,?,?)",(pid,"Stage advanced",stage+((" · "+details) if details else ""),stamp()))
     return pid
 
 @router.post("/ensure")
 def create_pipeline_item(payload:dict):
-    candidate_id=int(payload.get("candidate_id") or 0); job_id=int(payload.get("job_id") or 0)
+    try:
+        candidate_id=int(payload.get("candidate_id") or 0); job_id=int(payload.get("job_id") or 0)
+    except (TypeError,ValueError):
+        raise HTTPException(400,"Choose a valid candidate and job requirement.")
     if not rows("SELECT id FROM candidates WHERE id=?",(candidate_id,)): raise HTTPException(404,"Candidate not found.")
     if not rows("SELECT id FROM jobs WHERE id=?",(job_id,)): raise HTTPException(404,"Job not found.")
-    pid=ensure_pipeline(candidate_id,job_id,str(payload.get("stage","Sourcing")))
+    if not rows("SELECT id FROM job_versions WHERE job_id=? LIMIT 1",(job_id,)):
+        raise HTTPException(409,"Confirm the job requirement before adding it to the recruitment pipeline.")
+    stage=str(payload.get("stage","Sourcing"))
+    if stage not in STAGES: raise HTTPException(400,"Invalid recruitment pipeline stage.")
+    pid=ensure_pipeline(candidate_id,job_id,stage)
     return {"id":pid,"message":"Pipeline record available."}
 
 @router.get("")
@@ -91,11 +100,27 @@ def update_pipeline(pipeline_id:int,payload:dict):
     status=payload.get("stage_status",data[0]["stage_status"])
     if stage not in STAGES: raise HTTPException(400,"Invalid recruitment pipeline stage.")
     if status not in STATUSES: raise HTTPException(400,"Invalid pipeline stage status.")
+    old=data[0]
+    terminal=("Placed","Rejected","Withdrawn")
+    if old["current_stage"] in terminal and stage != old["current_stage"]:
+        raise HTTPException(409,"Placed, Rejected, and Withdrawn are closed pipeline outcomes. Create a new job/candidate pipeline record if a new process is required.")
+    order={s:i for i,s in enumerate(STAGES[:6])}
+    if stage in order and old["current_stage"] in order and order[stage]<order[old["current_stage"]]:
+        raise HTTPException(409,"Pipeline stages cannot move backwards. Add a recruiter activity note if a previous step needs revisiting.")
+    if stage in terminal: status="Completed"
+    due_at=str(payload.get("due_at",old["due_at"])).strip()
+    if due_at:
+        try: datetime.fromisoformat(due_at.replace("Z","+00:00"))
+        except ValueError: raise HTTPException(400,"Enter a valid next-action due date/time in ISO format.")
+    next_action=str(payload.get("next_action",old["next_action"])).strip()
+    if status=="Active" and not next_action:
+        raise HTTPException(400,"Add a next action when the pipeline record is Active.")
+    stage_changed = stage != old["current_stage"]
     with connect() as c:
         c.execute("UPDATE recruitment_pipeline SET current_stage=?,stage_status=?,owner=?,next_action=?,due_at=?,notes=?,updated_at=? WHERE id=?",
-          (stage,status,str(payload.get("owner",data[0]["owner"])),str(payload.get("next_action",data[0]["next_action"])),
-           str(payload.get("due_at",data[0]["due_at"])),str(payload.get("notes",data[0]["notes"])),stamp(),pipeline_id))
-        c.execute("INSERT INTO pipeline_events(pipeline_id,event_type,details,created_at) VALUES(?,?,?,?)",(pipeline_id,"Pipeline updated","Stage: "+stage+"; status: "+status+"; next action: "+str(payload.get("next_action",data[0]["next_action"])),stamp()))
+          (stage,status,str(payload.get("owner",old["owner"])),next_action,due_at,str(payload.get("notes",old["notes"])),stamp(),pipeline_id))
+        details=("Stage changed: "+old["current_stage"]+" → "+stage+"; " if stage_changed else "")+"Status: "+status+"; next action: "+next_action
+        c.execute("INSERT INTO pipeline_events(pipeline_id,event_type,details,created_at) VALUES(?,?,?,?)",(pipeline_id,"Pipeline updated",details,stamp()))
     return {"id":pipeline_id,"current_stage":stage,"stage_status":status,"message":"Pipeline record updated."}
 
 @router.post("/{pipeline_id}/activity")
