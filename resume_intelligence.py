@@ -137,6 +137,15 @@ def edit_resume_draft(draft_id:str,payload:ResumeEdit):
           (payload.resume_text if payload.resume_text is not None else d["resume_text"],json.dumps(parsed),stamp(),draft_id))
     return read_draft(draft_id)
 
+@router.get("/candidates/{candidate_id}/document")
+def download_candidate_resume(candidate_id:int):
+    with connect() as c:
+        row=c.execute("SELECT stored_path,original_filename FROM resume_drafts WHERE candidate_id=? AND status='Attached' ORDER BY updated_at DESC LIMIT 1",(candidate_id,)).fetchone()
+    if not row or not row["stored_path"]: raise HTTPException(404,"No uploaded resume is attached to this candidate.")
+    path=Path(row["stored_path"]).resolve()
+    if DOCS.resolve() not in path.parents or not path.is_file(): raise HTTPException(404,"The original resume file is not available.")
+    return FileResponse(path,filename=row["original_filename"] or path.name)
+
 @router.get("/drafts/{draft_id}/document")
 def download_resume_document(draft_id:str):
     d=read_draft(draft_id)
