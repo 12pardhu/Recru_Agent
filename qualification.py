@@ -63,11 +63,12 @@ def evaluate(job,candidate):
 
     locs=[x.strip() for x in re.split(r"[;|]",job.get("location","") or "") if x.strip()]
     cand_loc=(candidate.get("location") or "").lower()
+    cand_loc_norm=re.sub(r"[^a-z0-9]","",cand_loc)
     if not locs:
         criteria.append({"criterion":"Location","status":"Not specified","required":[],"candidate_value":candidate.get("location",""),"evidence":"The job has no saved location restriction."})
     elif not cand_loc:
         criteria.append({"criterion":"Location","status":"Unknown","required":locs,"candidate_value":"","evidence":"Candidate location is not recorded."})
-    elif any(loc.lower() in cand_loc or cand_loc in loc.lower() for loc in locs):
+    elif any(re.sub(r"[^a-z0-9]","",loc.lower()) in cand_loc_norm or cand_loc_norm in re.sub(r"[^a-z0-9]","",loc.lower()) for loc in locs):
         criteria.append({"criterion":"Location","status":"Potential match — verify","required":locs,"candidate_value":candidate.get("location"),"evidence":"Recorded location appears to match; confirm current location and commute/relocation."})
     else:
         criteria.append({"criterion":"Location","status":"Needs recruiter review","required":locs,"candidate_value":candidate.get("location"),"evidence":"Recorded location differs from the job location. Confirm remote/relocation flexibility."})
