@@ -2,6 +2,7 @@ import io, json, os, re, sqlite3, uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 ROOT = Path(__file__).parent
@@ -61,6 +62,8 @@ def analyze(text):
     tech_years = {}
     for skill in SKILLS:
         m = re.search(r"(\d+)\s*\+?\s*(?:years?|yrs?)\s+(?:of\s+)?(?:experience\s+(?:in|with)\s+)?"+re.escape(skill)+r"\b", text, re.I)
+        if not m:
+            m = re.search(re.escape(skill)+r"\s*[:\-]?\s*(\d+)\s*\+?\s*(?:years?|yrs?)", text, re.I)
         if m: tech_years[skill] = int(m.group(1))
 
     loc_match = re.search(r"^\s*(?:locations?|location preference)\s*[:\-]\s*(.+?)\s*$", text, re.I | re.M)
@@ -99,7 +102,7 @@ def analyze(text):
     relocation = re.search(r"[^\n]*(?:relocation|relocate)[^\n]*", text, re.I)
     tech_versions = {}
     for skill in SKILLS:
-        version = re.search(re.escape(skill)+r"\s*(?:version)?\s*(\d+(?:\.\d+)+)", text, re.I)
+        version = re.search(re.escape(skill)+r"\s*(?:version)?\s*(\d+(?:\.\d+)*)", text, re.I)
         if version: tech_versions[skill] = version.group(1)
     fields = {
       "title":title,"domain":domain,"locations":locations,
@@ -189,6 +192,16 @@ def list_drafts():
     with connect() as conn:
         rows = conn.execute("SELECT id,original_filename,status,created_at,updated_at FROM jd_drafts ORDER BY created_at DESC").fetchall()
     return [dict(r) for r in rows]
+
+@router.get("/drafts/{draft_id}/document")
+def download_original_document(draft_id: str):
+    d = read_draft(draft_id)
+    if not d.get("stored_path"):
+        raise HTTPException(404,"This draft was created from pasted text; there is no uploaded original file.")
+    path = Path(d["stored_path"]).resolve()
+    if DOCS.resolve() not in path.parents or not path.is_file():
+        raise HTTPException(404,"The original uploaded file is not available in this environment.")
+    return FileResponse(path, filename=d.get("original_filename") or path.name)
 
 @router.get("/drafts/{draft_id}")
 def get_draft(draft_id: str):
