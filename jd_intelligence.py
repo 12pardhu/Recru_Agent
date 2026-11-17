@@ -22,34 +22,111 @@ def init():
     with connect() as c:
         c.executescript("""
         CREATE TABLE IF NOT EXISTS jd_drafts(id TEXT PRIMARY KEY, original_filename TEXT DEFAULT '', stored_path TEXT DEFAULT '', jd_text TEXT NOT NULL, extracted_json TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'Needs review', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, confirmed_job_id INTEGER);
-        CREATE TABLE IF NOT EXISTS job_versions(id INTEGER PRIMARY KEY, job_id INTEGER NOT NULL, version INTEGER NOT NULL, snapshot_json TEXT NOT NULL, changed_at TEXT NOT NULL, changed_by TEXT DEFAULT 'Recruiter');
+        CREATE TABLE IF NOT EXISTS job_versions(id INTEGER PRIMARY KEY, job_id INTEGER NOT NULL, version INTEGER NOT NULL, snapshot_json TEXT NOT NULL, changed_at TEXT NOT NULL, changed_by TEXT DEFAULT 'Recruiter', UNIQUE(job_id,version));
         """)
 init()
 
+SKILLS = ["Java","Spring Boot","Microservices","REST API","SQL","PostgreSQL","Python","JavaScript","TypeScript","React","Node.js","AWS","Azure","GCP","Machine Learning","Deep Learning","PyTorch","TensorFlow","LLM","Spark","Kafka","Docker","Kubernetes","Jenkins","CI/CD","Snowflake","Databricks","C#",".NET","Terraform","Salesforce","GenAI","LangChain","RAG","Power BI","Tableau","Oracle","MongoDB","Redis"]
+
+def section(text, headings):
+    names = "|".join(re.escape(x) for x in headings)
+    m = re.search(r"(?ims)^\s*(?:" + names + r")\s*:?\s*$\n(.*?)(?=^\s*[A-Z][A-Za-z /&-]{2,45}\s*:?\s*$|\Z)", text)
+    return m.group(1).strip() if m else ""
+
+def first_evidence(text, terms):
+    if not terms: return ""
+    for line in text.splitlines():
+        if any(re.search(re.escape(str(t)), line, re.I) for t in terms):
+            return line.strip()[:300]
+    return ""
+
 def analyze(text):
-    lines = [x.strip() for x in text.splitlines() if x.strip()]
-    title = next((re.sub(r"^(?:job title|position|role)\s*:\s*", "", x, flags=re.I) for x in lines[:12] if len(x) < 100 and not re.match(r"^(experience|locations?|mandatory|preferred|responsibilities)\s*:", x, re.I)), "New Job Requirement")
+    lines = [x.strip(" •-*\t") for x in text.splitlines() if x.strip()]
+    title = ""
+    for line in lines[:15]:
+        m = re.match(r"^(?:job title|position|role)\s*:\s*(.+)$", line, re.I)
+        if m: title = m.group(1).strip(); break
+        if len(line) < 100 and not re.match(r"^(experience|locations?|mandatory|preferred|required|responsibilities|qualifications|requirements|rate|work authorization)\s*:", line, re.I):
+            title = line; break
+    title = title or "New Job Requirement"
     low = text.lower()
-    exp = re.search(r"(\d+)\s*\+?\s*(?:years?|yrs?)", low)
-    loc_match = re.search(r"^\s*locations?\s*[:\-]\s*(.+?)\s*$", text, re.I | re.M)
-    locations = [x.strip(" ,") for x in re.split(r"\s*(?:;|\||\s+and\s+)\s*", loc_match.group(1)) if x.strip(" ,")] if loc_match else []
-    skills_bank = ["Java","Spring Boot","Microservices","REST API","SQL","PostgreSQL","Python","JavaScript","TypeScript","React","Node.js","AWS","Azure","GCP","Machine Learning","Deep Learning","PyTorch","TensorFlow","LLM","Spark","Kafka","Docker","Kubernetes","Jenkins","CI/CD","Snowflake","Databricks","C#",".NET"]
-    def skills_in(source):
-        return [s for s in skills_bank if re.search(r"(?<![\w])"+re.escape(s)+r"(?![\w])", source, re.I)]
-    def section(name):
-        m = re.search(r"(?ims)^"+name+r"\s*:?\s*$\n(.*?)(?=^(?:mandatory|preferred|optional|responsibilities|qualifications|requirements|location|experience)\s*:?\s*$|\Z)", text)
-        return m.group(1) if m else ""
-    mandatory = skills_in(section("mandatory")) if section("mandatory") else []
-    preferred = skills_in(section("preferred")) if section("preferred") else []
-    if not mandatory and not section("mandatory"):
-        mandatory = [s for s in skills_in(text) if s not in preferred]
-    auth = [x for x in ["STEM OPT","OPT","H-1B","Green Card","US Citizen"] if re.search(re.escape(x), text, re.I)]
-    employment = next((x for x in ["C2C","W2","Contract-to-Hire","Full-time","1099","Contract"] if re.search(r"\b"+re.escape(x)+r"\b",text,re.I)), "Unknown")
-    rate = re.search(r"(?:rate|pay|compensation)\s*[:\-]?\s*([^\n]+)", text, re.I)
-    domain = next((d for d, keys in [("AI/ML",["machine learning","deep learning","ai/ml","llm"]),("Data Engineering",["data engineer","spark","kafka","databricks"]),("Cloud/DevOps",["devops engineer","cloud engineer","terraform"]),("Software Engineering",["developer","software engineer","java","python"])] if any(k in low for k in keys)), "General IT")
-    fields = {"title":title,"domain":domain,"locations":locations,"min_experience":int(exp.group(1)) if exp else None,"mandatory_skills":mandatory,"preferred_skills":preferred,"work_authorization":auth,"employment_type":employment,"rate":rate.group(1).strip() if rate else "","work_arrangement":next((x for x in ["Remote","Hybrid","Onsite"] if re.search(r"\b"+x+r"\b",text,re.I)),"")}
-    evidence = {k:{"status":"Missing" if v in ("",[],None) else "Needs review","evidence":str(v) if v not in ("",[],None) else ""} for k,v in fields.items()}
+
+    # Total and role-specific experience are kept separate; no ambiguous value is silently substituted.
+    total = re.search(r"(?:total\s+)?(\d+)\s*\+?\s*(?:years?|yrs?)(?:\s+of\s+(?:total\s+)?experience)?", text, re.I)
+    relevant = re.search(r"(\d+)\s*\+?\s*(?:years?|yrs?)\s+(?:of\s+)?(?:relevant|related|hands-on)\s+experience", text, re.I)
+    tech_years = {}
+    for skill in SKILLS:
+        m = re.search(r"(\d+)\s*\+?\s*(?:years?|yrs?)\s+(?:of\s+)?(?:experience\s+(?:in|with)\s+)?"+re.escape(skill)+r"\b", text, re.I)
+        if m: tech_years[skill] = int(m.group(1))
+
+    loc_match = re.search(r"^\s*(?:locations?|location preference)\s*[:\-]\s*(.+?)\s*$", text, re.I | re.M)
+    locations = []
+    if loc_match:
+        # Keep city/state pairs intact; semicolon, slash, pipe and explicit "and" delimit locations.
+        locations = [x.strip(" ,") for x in re.split(r"\s*(?:;|\||/|\band\b)\s*", loc_match.group(1)) if x.strip(" ,")]
+    else:
+        m = re.search(r"\b(?:based in|location is)\s+([^\n.]+)", text, re.I)
+        if m: locations = [m.group(1).strip()]
+
+    mandatory_text = section(text, ["mandatory skills","mandatory","required skills","required qualifications","must have","must-have"])
+    preferred_text = section(text, ["preferred skills","preferred","nice to have","nice-to-have","good to have"])
+    def find_skills(source):
+        return [s for s in SKILLS if re.search(r"(?<![\w])"+re.escape(s)+r"(?![\w])", source, re.I)]
+    mandatory = find_skills(mandatory_text) if mandatory_text else []
+    preferred = find_skills(preferred_text) if preferred_text else []
+    if not mandatory_text and not preferred_text:
+        mandatory = find_skills(text)
+    mandatory = [s for s in mandatory if s.lower() not in {p.lower() for p in preferred}]
+
+    auth_terms = ["STEM OPT","OPT","H-1B","Green Card","US Citizen","EAD"]
+    auth = [x for x in auth_terms if re.search(re.escape(x), text, re.I)]
+    employment_terms = ["C2C","W2","Contract-to-Hire","Full-time","1099","Contract"]
+    employment = [x for x in employment_terms if re.search(r"\b"+re.escape(x)+r"\b",text,re.I)]
+    rate = re.search(r"(?:rate|pay|compensation|salary)\s*[:\-]?\s*([^\n]+)", text, re.I)
+    arrangements = [x for x in ["Remote","Hybrid","Onsite","On-site"] if re.search(r"\b"+re.escape(x)+r"\b",text,re.I)]
+    domain = next((d for d, keys in [("AI/ML",["machine learning","deep learning","ai/ml","llm","genai"]),("Data Engineering",["data engineer","spark","kafka","databricks"]),("Cloud/DevOps",["devops engineer","cloud engineer","terraform"]),("QA/Testing",["qa engineer","quality assurance","automation testing"]),("Cybersecurity",["cybersecurity","security engineer"]),("Software Engineering",["software engineer","developer","java","python"])] if any(k in low for k in keys)), "General IT")
+    responsibilities = section(text, ["responsibilities","what you'll do","what you will do","job duties"])
+    fields = {
+      "title":title,"domain":domain,"locations":locations,
+      "min_experience":int(total.group(1)) if total else None,
+      "relevant_experience":int(relevant.group(1)) if relevant else None,
+      "technology_experience":tech_years,
+      "mandatory_skills":mandatory,"preferred_skills":preferred,
+      "work_authorization":auth,"employment_type":employment or ["Unknown"],
+      "rate":rate.group(1).strip() if rate else "",
+      "work_arrangement":arrangements,"responsibilities":responsibilities
+    }
+    evidence = {}
+    for key, value in fields.items():
+        terms = value if isinstance(value,list) else list(value.keys()) if isinstance(value,dict) else [value] if value not in ("",None) else []
+        snippet = first_evidence(text, terms)
+        missing = value in ("",[],None,{}) or value == ["Unknown"] or value == "New Job Requirement"
+        evidence[key] = {"status":"Missing" if missing else "Needs review","evidence":snippet}
     return {"fields":fields,"evidence":evidence}
+
+def quality_report(text, fields):
+    warnings = []
+    blockers = []
+    title = str(fields.get("title","")).strip()
+    if not title or title == "New Job Requirement":
+        blockers.append({"field":"title","message":"A clear job title is required."})
+    if not fields.get("mandatory_skills") and not fields.get("preferred_skills"):
+        warnings.append({"field":"skills","message":"No skills were identified. Review the JD and add required skills if applicable."})
+    if not fields.get("locations"):
+        warnings.append({"field":"locations","message":"No work location was identified."})
+    if fields.get("min_experience") is None:
+        warnings.append({"field":"min_experience","message":"Total experience was not identified."})
+    if fields.get("work_authorization") == []:
+        warnings.append({"field":"work_authorization","message":"Work authorization is not stated. It will remain Unknown."})
+    if fields.get("employment_type") in ([],["Unknown"]):
+        warnings.append({"field":"employment_type","message":"Employment type is not stated. It will remain Unknown."})
+    if len(fields.get("work_arrangement") or []) > 1:
+        warnings.append({"field":"work_arrangement","message":"Multiple work arrangements appear in the JD. Confirm which are accepted."})
+    if fields.get("relevant_experience") and fields.get("min_experience") and fields["relevant_experience"] > fields["min_experience"]:
+        warnings.append({"field":"experience","message":"Relevant experience is greater than total experience. Verify both values."})
+    if mandatory_conflict := ({x.lower() for x in fields.get("mandatory_skills",[])} & {x.lower() for x in fields.get("preferred_skills",[])}):
+        warnings.append({"field":"skills","message":"Some skills are classified as both mandatory and preferred: "+", ".join(sorted(mandatory_conflict))})
+    return {"ready_to_confirm":not blockers,"blockers":blockers,"warnings":warnings,"field_status":{k:v["status"] for k,v in analyze(text)["evidence"].items()}}
 
 def read_draft(draft_id):
     with connect() as c: row = c.execute("SELECT * FROM jd_drafts WHERE id=?", (draft_id,)).fetchone()
@@ -102,26 +179,38 @@ def get_draft(draft_id: str):
 
 @router.patch("/drafts/{draft_id}")
 def edit_draft(draft_id: str, payload: DraftEdit):
-    d = read_draft(draft_id); analysis = d["analysis"]; analysis["fields"].update(payload.fields)
+    d = read_draft(draft_id)
+    if d["status"] == "Confirmed": raise HTTPException(409,"Confirmed requirements are immutable here. Create a new draft for changes.")
+    analysis = d["analysis"]; analysis["fields"].update(payload.fields)
     with connect() as c:
         c.execute("UPDATE jd_drafts SET jd_text=?,extracted_json=?,updated_at=? WHERE id=?",(payload.jd_text if payload.jd_text is not None else d["jd_text"],json.dumps(analysis),stamp(),draft_id))
     return read_draft(draft_id)
 
+@router.get("/drafts/{draft_id}/quality")
+def draft_quality(draft_id: str):
+    d = read_draft(draft_id)
+    return quality_report(d["jd_text"],d["analysis"]["fields"])
+
 @router.post("/drafts/{draft_id}/confirm")
-def confirm_draft(draft_id: str):
+def confirm_draft(draft_id: str, payload: dict = None):
     d = read_draft(draft_id)
     if d["status"] == "Confirmed": return {"job_id":d["confirmed_job_id"],"message":"Already confirmed."}
-    f = d["analysis"]["fields"]; title = str(f.get("title","")).strip()
-    if not title or title == "New Job Requirement": raise HTTPException(400,"Review and enter a job title before confirming.")
+    f = d["analysis"]["fields"]; report = quality_report(d["jd_text"],f)
+    if not report["ready_to_confirm"]:
+        raise HTTPException(400,{"message":"Resolve the blocking fields before confirming.","quality":report})
+    if report["warnings"] and not (payload or {}).get("acknowledge_warnings"):
+        raise HTTPException(409,{"message":"Review the quality warnings and explicitly acknowledge them before confirming.","quality":report})
+    title = str(f.get("title","")).strip()
     locations = f.get("locations") or []; location = "; ".join(locations) if isinstance(locations,list) else str(locations)
     skills = ", ".join(f.get("mandatory_skills") or []); preferred = ", ".join(f.get("preferred_skills") or [])
     auth = ", ".join(f.get("work_authorization") or []) or "Unknown"
+    employment = ", ".join(f.get("employment_type") or ["Unknown"])
     with connect() as c:
-        cur = c.execute("INSERT INTO jobs(title,location,min_experience,skills,work_auth,jd_text,created_at,domain,preferred_skills,employment_type,source_mode) VALUES(?,?,?,?,?,?,?,?,?,?,?)",(title,location,int(f.get("min_experience") or 0),skills,auth,d["jd_text"],stamp(),f.get("domain",""),preferred,f.get("employment_type","Unknown"),"both"))
+        cur = c.execute("INSERT INTO jobs(title,location,min_experience,skills,work_auth,jd_text,created_at,domain,preferred_skills,employment_type,source_mode) VALUES(?,?,?,?,?,?,?,?,?,?,?)",(title,location,int(f.get("min_experience") or 0),skills,auth,d["jd_text"],stamp(),f.get("domain",""),preferred,employment,"both"))
         jid = cur.lastrowid
-        c.execute("INSERT INTO job_versions(job_id,version,snapshot_json,changed_at) VALUES(?,1,?,?)",(jid,json.dumps(f),stamp()))
+        c.execute("INSERT INTO job_versions(job_id,version,snapshot_json,changed_at) VALUES(?,1,?,?)",(jid,json.dumps({"fields":f,"quality":report}),stamp()))
         c.execute("UPDATE jd_drafts SET status='Confirmed',confirmed_job_id=?,updated_at=? WHERE id=?",(jid,stamp(),draft_id))
-    return {"job_id":jid,"message":"Requirement confirmed and saved. Sourcing has not started; use Candidate Sourcing when ready."}
+    return {"job_id":jid,"message":"Requirement confirmed and saved. Sourcing has not started; use Candidate Sourcing when ready.","quality":report}
 
 @router.get("/jobs/{job_id}/versions")
 def get_versions(job_id: int):
