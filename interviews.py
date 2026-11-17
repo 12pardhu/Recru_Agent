@@ -35,8 +35,11 @@ def validate_schedule(value, timezone_name):
         local_zone = ZoneInfo(zone)
     except ZoneInfoNotFoundError:
         raise HTTPException(400,"Use a valid IANA time zone such as America/Chicago or America/New_York.")
-    if parsed.date() < datetime.now(local_zone).date():
-        raise HTTPException(400,"Interview date cannot be in the past in the selected time zone.")
+    current_local = datetime.now(local_zone)
+    comparison = parsed.astimezone(local_zone) if parsed.tzinfo else parsed
+    current_comparison = current_local if parsed.tzinfo else current_local.replace(tzinfo=None)
+    if comparison < current_comparison:
+        raise HTTPException(400,"Interview date and time cannot be in the past in the selected time zone.")
     return raw, zone
 
 def init():
@@ -115,6 +118,7 @@ def update_interview(interview_id:int,payload:dict):
     if fmt not in ("Video","Phone","Onsite"): raise HTTPException(400,"Choose Video, Phone, or Onsite.")
     link=str(payload.get("meeting_link",old["meeting_link"])).strip()
     if link and not re.match(r"^https?://",link,re.I): raise HTTPException(400,"Meeting link must begin with http:// or https://.")
+    if fmt=="Onsite" and not str(payload.get("meeting_location",old["meeting_location"])).strip(): raise HTTPException(400,"Enter the onsite interview location.")
     confirm=payload.get("candidate_confirmation",old["candidate_confirmation"])
     if confirm not in ("Unknown","Confirmed","Declined"): raise HTTPException(400,"Candidate confirmation must be Unknown, Confirmed, or Declined.")
     round_number=int(payload.get("round_number",old["round_number"]))
@@ -125,7 +129,6 @@ def update_interview(interview_id:int,payload:dict):
         scheduled != old["scheduled_at"], timezone_name != old["timezone"],
         fmt != old["format"], link != old["meeting_link"],
         str(payload.get("meeting_location",old["meeting_location"])) != old["meeting_location"],
-        str(payload.get("interviewer_names",old["interviewer_names"])) != old["interviewer_names"],
         round_number != old["round_number"]
     ])
     new_status = "Cancelled" if confirm=="Declined" else ("Rescheduled" if schedule_changed else old["status"])
@@ -145,8 +148,10 @@ def update_interview_status(interview_id:int,payload:dict):
     current=rows("SELECT status,candidate_confirmation FROM interviews WHERE id=?",(interview_id,))[0]
     if current["status"] in ("Completed","Cancelled","No Show"):
         raise HTTPException(409,"Closed interviews cannot be reopened. Create a new interview round if needed.")
-    if status=="Scheduled" and current["candidate_confirmation"]=="Declined":
-        raise HTTPException(409,"The candidate declined this interview. Update the schedule only after confirming a new time with them.")
+    if status=="Completed":
+        raise HTTPException(409,"Record the interviewer outcome and feedback using Save Interview Feedback to complete this interview.")
+    if status in ("Scheduled","Rescheduled") and current["candidate_confirmation"]=="Declined":
+        raise HTTPException(409,"The candidate declined this interview. Confirm a new time with them before reopening the schedule.")
     with connect() as c:
         c.execute("UPDATE interviews SET status=?,updated_at=? WHERE id=?",(status,stamp(),interview_id))
         c.execute("INSERT INTO interview_events(interview_id,event_type,details,created_at) VALUES(?,?,?,?)",(interview_id,"Status updated",status,stamp()))
