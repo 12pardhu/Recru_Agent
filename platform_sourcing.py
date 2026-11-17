@@ -37,6 +37,20 @@ def stamp():
     return datetime.now(timezone.utc).isoformat()
 
 
+def platform_search_url(platform, query, location):
+    q = quote_plus(query)
+    loc = quote_plus(location)
+    if platform == "LinkedIn":
+        return PLATFORMS[platform] + "?keywords=" + q
+    if platform == "Dice":
+        return "https://www.dice.com/jobs?q=" + q + ("&location=" + loc if loc else "")
+    if platform == "Indeed":
+        return "https://www.indeed.com/jobs?q=" + q + ("&l=" + loc if loc else "")
+    if platform == "Monster":
+        return "https://www.monster.com/jobs/search/?q=" + q + ("&where=" + loc if loc else "")
+    return PLATFORMS[platform]
+
+
 def init():
     with connect() as c:
         c.execute("""
@@ -91,7 +105,7 @@ def create_platform_plan(job_id: int, payload: PlanRequest):
                     ("Role + skills", " ".join(x for x in [job["title"], ", ".join(skills[:5]), location] if x)),
                 ]
                 for search_type, query in queries:
-                    variants.append((job_id, platform, location, search_type, query, PLATFORMS[platform], "Prepared", stamp(), stamp()))
+                    variants.append((job_id, platform, location, search_type, query, platform_search_url(platform, query, location), "Prepared", stamp(), stamp()))
         c.executemany("""
           INSERT INTO platform_sourcing_searches
           (job_id,platform,location,search_type,query_text,platform_url,status,created_at,updated_at)
