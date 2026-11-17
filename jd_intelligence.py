@@ -182,6 +182,10 @@ def edit_draft(draft_id: str, payload: DraftEdit):
     d = read_draft(draft_id)
     if d["status"] == "Confirmed": raise HTTPException(409,"Confirmed requirements are immutable here. Create a new draft for changes.")
     analysis = d["analysis"]; analysis["fields"].update(payload.fields)
+    for key in ("employment_type","work_arrangement","work_authorization","locations","mandatory_skills","preferred_skills"):
+        value = analysis["fields"].get(key)
+        if isinstance(value,str):
+            analysis["fields"][key] = [x.strip() for x in re.split(r"[,;]",value) if x.strip()]
     with connect() as c:
         c.execute("UPDATE jd_drafts SET jd_text=?,extracted_json=?,updated_at=? WHERE id=?",(payload.jd_text if payload.jd_text is not None else d["jd_text"],json.dumps(analysis),stamp(),draft_id))
     return read_draft(draft_id)
@@ -204,7 +208,8 @@ def confirm_draft(draft_id: str, payload: dict = None):
     locations = f.get("locations") or []; location = "; ".join(locations) if isinstance(locations,list) else str(locations)
     skills = ", ".join(f.get("mandatory_skills") or []); preferred = ", ".join(f.get("preferred_skills") or [])
     auth = ", ".join(f.get("work_authorization") or []) or "Unknown"
-    employment = ", ".join(f.get("employment_type") or ["Unknown"])
+    employment_value = f.get("employment_type") or ["Unknown"]
+    employment = ", ".join(employment_value if isinstance(employment_value,list) else [str(employment_value)])
     with connect() as c:
         cur = c.execute("INSERT INTO jobs(title,location,min_experience,skills,work_auth,jd_text,created_at,domain,preferred_skills,employment_type,source_mode) VALUES(?,?,?,?,?,?,?,?,?,?,?)",(title,location,int(f.get("min_experience") or 0),skills,auth,d["jd_text"],stamp(),f.get("domain",""),preferred,employment,"both"))
         jid = cur.lastrowid
