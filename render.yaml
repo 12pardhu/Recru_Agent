@@ -9,3 +9,11 @@ services:
     envVars:
       - key: DATA_DIR
         value: /opt/render/project/src/data
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: AUTH_COOKIE_SECURE
+        value: "true"
