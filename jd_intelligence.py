@@ -53,18 +53,25 @@ def analyze(text):
     title = title or "New Job Requirement"
     low = text.lower()
 
-    # Total and role-specific experience are kept separate; no ambiguous value is silently substituted.
-    total = re.search(r"total\s+experience\s*(?:of|:)?\s*(\d+)\s*\+?\s*(?:years?|yrs?)", text, re.I)
-    if not total:
-        total = next((m for m in re.finditer(r"(\d+)\s*\+?\s*(?:years?|yrs?)", text, re.I)
-                      if not re.match(r"\s*(?:of\s+)?(?:relevant|related|hands-on)", text[m.end():], re.I)), None)
+    # Keep overall, relevant and technology-specific experience separate.
+    total = re.search(r"(?:total|overall|minimum|required)\s+experience\s*(?:of|:)?\s*(\d+)\s*\+?\s*(?:years?|yrs?)", text, re.I)
     relevant = re.search(r"(\d+)\s*\+?\s*(?:years?|yrs?)\s+(?:of\s+)?(?:relevant|related|hands-on)\s+experience", text, re.I)
+    if not total:
+        candidates = list(re.finditer(r"(\d+)\s*\+?\s*(?:years?|yrs?)\s+(?:of\s+)?experience\b", text, re.I))
+        # Exclude relevant experience and skill-specific phrases from the overall experience value.
+        candidates = [m for m in candidates if not re.search(r"(?:relevant|related|hands-on|experience\s+(?:in|with))\s*$", text[max(0,m.start()-35):m.end()], re.I)]
+        total = candidates[0] if candidates else None
     tech_years = {}
     for skill in SKILLS:
-        m = re.search(r"(\d+)\s*\+?\s*(?:years?|yrs?)\s+(?:of\s+)?(?:experience\s+(?:in|with)\s+)?"+re.escape(skill)+r"\b", text, re.I)
-        if not m:
-            m = re.search(re.escape(skill)+r"\s*[:\-]?\s*(\d+)\s*\+?\s*(?:years?|yrs?)", text, re.I)
-        if m: tech_years[skill] = int(m.group(1))
+        patterns = [
+            r"(\d+)\s*\+?\s*(?:years?|yrs?)\s+(?:of\s+)?(?:experience\s+(?:in|with)\s+)?"+re.escape(skill)+r"\b",
+            re.escape(skill)+r"\s*[:\-]?\s*(\d+)\s*\+?\s*(?:years?|yrs?)",
+            re.escape(skill)+r"\s+experience\s*[:\-]?\s*(\d+)\s*\+?\s*(?:years?|yrs?)"
+        ]
+        for pattern in patterns:
+            m = re.search(pattern, text, re.I)
+            if m:
+                tech_years[skill] = int(m.group(1)); break
 
     loc_match = re.search(r"^\s*(?:locations?|location preference)\s*[:\-]\s*(.+?)\s*$", text, re.I | re.M)
     locations = []
@@ -118,11 +125,17 @@ def analyze(text):
     }
     evidence = {}
     employment_conflict = {"C2C","W2"}.issubset(set(employment))
+    arrangement_conflict = {"Remote","Onsite"}.issubset(set(arrangements)) or {"Remote","On-site"}.issubset(set(arrangements))
     for key, value in fields.items():
         terms = value if isinstance(value,list) else list(value.keys()) if isinstance(value,dict) else [value] if value not in ("",None) else []
         snippet = first_evidence(text, terms)
+        if key == "min_experience" and total:
+            snippet = next((line.strip() for line in text.splitlines() if re.search(r"(?:total|overall|minimum|required)?\s*experience",line,re.I) and re.search(r"\b"+str(value)+r"\s*\+?\s*(?:years?|yrs?)",line,re.I)), "")
+        if key == "relevant_experience" and relevant:
+            snippet = next((line.strip() for line in text.splitlines() if re.search(r"relevant|related|hands-on",line,re.I) and re.search(r"\b"+str(value)+r"\s*\+?\s*(?:years?|yrs?)",line,re.I)), "")
         missing = value in ("",[],None,{}) or value == ["Unknown"] or value == "New Job Requirement"
-        status = "Conflicting" if key == "employment_type" and employment_conflict else ("Missing" if missing else "Needs review")
+        conflict = (key == "employment_type" and employment_conflict) or (key == "work_arrangement" and arrangement_conflict)
+        status = "Conflicting" if conflict else ("Missing" if missing else "Needs review")
         evidence[key] = {"status":status,"evidence":snippet}
     return {"fields":fields,"evidence":evidence}
 
@@ -132,27 +145,51 @@ def quality_report(text, fields):
     title = str(fields.get("title","")).strip()
     if not title or title == "New Job Requirement":
         blockers.append({"field":"title","message":"A clear job title is required."})
-    if not fields.get("mandatory_skills") and not fields.get("preferred_skills"):
+    mandatory = fields.get("mandatory_skills") or []
+    preferred = fields.get("preferred_skills") or []
+    optional = fields.get("optional_skills") or []
+    if not mandatory and not preferred and not optional:
         warnings.append({"field":"skills","message":"No skills were identified. Review the JD and add required skills if applicable."})
+    overlap_mp = {str(x).lower() for x in mandatory} & {str(x).lower() for x in preferred}
+    overlap_mo = {str(x).lower() for x in mandatory} & {str(x).lower() for x in optional}
+    overlap_po = {str(x).lower() for x in preferred} & {str(x).lower() for x in optional}
+    if overlap_mp or overlap_mo or overlap_po:
+        overlaps = sorted(overlap_mp | overlap_mo | overlap_po)
+        warnings.append({"field":"skills","message":"Skills are assigned to more than one category: "+", ".join(overlaps)+". Correct the categories before confirmation."})
     if not fields.get("locations"):
-        warnings.append({"field":"locations","message":"No work location was identified."})
+        warnings.append({"field":"locations","message":"No work location was identified. Confirm whether location is flexible or unknown."})
     if fields.get("min_experience") is None:
-        warnings.append({"field":"min_experience","message":"Total experience was not identified."})
+        warnings.append({"field":"min_experience","message":"Total experience was not identified. It will remain unspecified."})
+    if fields.get("relevant_experience") is not None and fields.get("min_experience") is not None and fields["relevant_experience"] > fields["min_experience"]:
+        warnings.append({"field":"experience","message":"Relevant experience is greater than total experience. Verify both values."})
+    tech_exp = fields.get("technology_experience") or {}
+    for skill, years in tech_exp.items():
+        if fields.get("min_experience") is not None and years > fields["min_experience"]:
+            warnings.append({"field":"technology_experience","message":str(skill)+" experience exceeds total experience. Verify the values."})
     if not fields.get("rate"):
         warnings.append({"field":"rate","message":"Rate or compensation is not stated."})
-    if not fields.get("work_arrangement"):
+    arrangements = fields.get("work_arrangement") or []
+    if not arrangements:
         warnings.append({"field":"work_arrangement","message":"Remote, hybrid, or onsite arrangement is not stated."})
-    if fields.get("work_authorization") == []:
-        warnings.append({"field":"work_authorization","message":"Work authorization is not stated. It will remain Unknown."})
-    if fields.get("employment_type") in ([],["Unknown"]):
-        warnings.append({"field":"employment_type","message":"Employment type is not stated. It will remain Unknown."})
-    if len(fields.get("work_arrangement") or []) > 1:
+    if len(set(arrangements)) > 1:
         warnings.append({"field":"work_arrangement","message":"Multiple work arrangements appear in the JD. Confirm which are accepted."})
-    if fields.get("relevant_experience") and fields.get("min_experience") and fields["relevant_experience"] > fields["min_experience"]:
-        warnings.append({"field":"experience","message":"Relevant experience is greater than total experience. Verify both values."})
-    if mandatory_conflict := ({x.lower() for x in fields.get("mandatory_skills",[])} & {x.lower() for x in fields.get("preferred_skills",[])}):
-        warnings.append({"field":"skills","message":"Some skills are classified as both mandatory and preferred: "+", ".join(sorted(mandatory_conflict))})
-    return {"ready_to_confirm":not blockers,"blockers":blockers,"warnings":warnings,"field_status":{k:v["status"] for k,v in analyze(text)["evidence"].items()}}
+    auth = fields.get("work_authorization") or []
+    if not auth:
+        warnings.append({"field":"work_authorization","message":"Work authorization is not stated. It will remain Unknown; do not infer candidate authorization from this requirement."})
+    employment = fields.get("employment_type") or ["Unknown"]
+    if isinstance(employment,str): employment = [employment]
+    if not employment or employment == ["Unknown"]:
+        warnings.append({"field":"employment_type","message":"Employment type is not stated. It will remain Unknown."})
+    if {"C2C","W2"}.issubset({str(x).upper() for x in employment}):
+        warnings.append({"field":"employment_type","message":"Both C2C and W2 appear. Confirm whether both are accepted or whether the JD is contradictory."})
+    if fields.get("work_arrangement") and {"Remote","Onsite"}.issubset(set(fields.get("work_arrangement") or [])):
+        warnings.append({"field":"work_arrangement","message":"The JD appears to list both remote and onsite. Confirm whether this means hybrid or conflicting instructions."})
+    statuses = {}
+    for key, value in fields.items():
+        missing = value in ("", [], None, {}) or value == ["Unknown"] or value == "New Job Requirement"
+        statuses[key] = "Missing" if missing else "Needs review"
+    if title and title != "New Job Requirement": statuses["title"] = "Needs review"
+    return {"ready_to_confirm":not blockers,"blockers":blockers,"warnings":warnings,"field_status":statuses}
 
 def read_draft(draft_id):
     with connect() as c: row = c.execute("SELECT * FROM jd_drafts WHERE id=?", (draft_id,)).fetchone()
