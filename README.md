@@ -1,6 +1,6 @@
 # Recru Agent
 
-Cloud-hosted recruiter-assist application for US IT staffing. The product is being developed in 12 milestones. The current development branch contains the completed development implementation for **Milestone 1 — Job Requirement Intelligence** and the in-progress **Milestone 2 — Candidate Sourcing Intelligence**. Runtime verification and formal test/sign-off are intentionally deferred until all 12 development milestones are built.
+Cloud-hosted recruiter-assist application for US IT staffing. The product is being developed in 12 milestones. The current development branch contains the completed development implementation for **Milestone 1 — Job Requirement Intelligence** **Milestone 2 — Candidate Sourcing Intelligence** and the in-progress **Milestone 3 — Resume Intelligence**. Runtime verification and formal test/sign-off are intentionally deferred until all 12 development milestones are built.
 
 ## Milestone 1: Job Requirement Intelligence
 
@@ -25,6 +25,17 @@ Cloud-hosted recruiter-assist application for US IT staffing. The product is bei
 - Detect duplicate candidate email/profile URLs before saving.
 - Require candidate confirmation before recording OPT/STEM OPT or other work authorization as confirmed; require candidate confirmation for C2C yes/no.
 - Do not scrape LinkedIn or automatically extract profile data. Open to Work remains a profile signal, not proof of candidate availability.
+
+## Milestone 3: Resume Intelligence (in development)
+
+- Upload PDF, DOCX, TXT, or MD resumes (15 MB maximum), or paste resume text.
+- Extract candidate name, email, phone, labelled location, experience, skills, education, certifications, work history, projects, summary, and profile links.
+- Preserve the original uploaded resume and allow recruiter download.
+- Show field evidence and missing-field warnings; recruiter reviews and edits the candidate form before saving.
+- Attach the reviewed resume draft to a candidate record and expose the attached original resume in the candidate database.
+- Resume parsing does not infer or confirm OPT/STEM OPT, other work authorization, C2C status, Open to Work, or availability.
+
+**Important:** resume extraction is rule-based and may miss content in scanned PDFs, complex layouts, columns, images, or unusual resume formats. OCR is not included. Human review is required.
 
 ## Existing recruiter-assist features
 
@@ -69,4 +80,4 @@ No login, role-based access control, tenant isolation, managed persistent databa
 11. Recruiter Productivity Dashboard
 12. Security, Quality and Release
 
-Milestone 1 development implementation is complete; its runtime verification and test/sign-off remain deferred. Milestone 2 is under development.
+Milestone 1 development implementation is complete; its runtime verification and test/sign-off remain deferred. Milestone 2 development implementation is complete; runtime verification and testing remain deferred. Milestone 3 is under development.
