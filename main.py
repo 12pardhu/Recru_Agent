@@ -102,7 +102,7 @@ def add_job(j:JobIn):
         cur=c.execute("INSERT INTO jobs(title,location,min_experience,skills,work_auth,jd_text,created_at,domain,preferred_skills,employment_type,source_mode) VALUES(?,?,?,?,?,?,?,?,?,?,?)",(j.title.strip(),j.location,j.min_experience,j.skills,j.work_auth,j.jd_text,now(),j.domain,j.preferred_skills,j.employment_type,j.source_mode))
         jid=cur.lastrowid
     # Both modes are prepared at intake. Auto mode creates a task; recruiter can also run it on demand.
-    return {"id":jid,"message":"Requirement saved; sourcing plan can now be prepared","sourcing_plan":build_plan(jid)}
+    return {"id":jid,"message":"Requirement saved without sourcing. Use Job Requirement Intelligence to review and confirm before sourcing."}
 @app.get("/api/candidates")
 def get_candidates(): return rows("SELECT * FROM candidates ORDER BY id DESC")
 @app.post("/api/candidates")
