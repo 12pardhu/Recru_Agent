@@ -28,7 +28,7 @@ def init():
         """)
         migrations={
           "jobs":{"domain":"TEXT DEFAULT ''","preferred_skills":"TEXT DEFAULT ''","employment_type":"TEXT DEFAULT 'Unknown'","source_mode":"TEXT DEFAULT 'both'"},
-          "candidates":{"open_to_work":"TEXT DEFAULT 'Unknown'","availability_signal":"TEXT DEFAULT 'Unknown'","profile_updated":"TEXT DEFAULT ''","source_type":"TEXT DEFAULT 'Manual'","source_url":"TEXT DEFAULT ''","source_evidence":"TEXT DEFAULT ''","c2c_confirmed":"TEXT DEFAULT 'Unknown'","work_auth_confirmed":"TEXT DEFAULT 'Unknown'","sourcing_task_id":"INTEGER","phone":"TEXT DEFAULT ''","education":"TEXT DEFAULT ''","certifications":"TEXT DEFAULT ''","work_history":"TEXT DEFAULT ''","resume_draft_id":"TEXT DEFAULT ''"}
+          "candidates":{"open_to_work":"TEXT DEFAULT 'Unknown'","availability_signal":"TEXT DEFAULT 'Unknown'","profile_updated":"TEXT DEFAULT ''","source_type":"TEXT DEFAULT 'Manual'","source_url":"TEXT DEFAULT ''","source_evidence":"TEXT DEFAULT ''","c2c_confirmed":"TEXT DEFAULT 'Unknown'","work_auth_confirmed":"TEXT DEFAULT 'Unknown'","sourcing_task_id":"INTEGER","phone":"TEXT DEFAULT ''","education":"TEXT DEFAULT ''","certifications":"TEXT DEFAULT ''","work_history":"TEXT DEFAULT ''","resume_draft_id":"TEXT DEFAULT ''","employment_preference":"TEXT DEFAULT 'Unknown'","employment_preference_confirmed":"TEXT DEFAULT 'Unknown'"}
         }
         migrations["sourcing_tasks"]={"target_count":"INTEGER DEFAULT 50","notes":"TEXT DEFAULT ''","started_at":"TEXT DEFAULT ''","completed_at":"TEXT DEFAULT ''"}
         migrations["sourcing_searches"]={"search_type":"TEXT DEFAULT 'Role + skills'"}
@@ -98,6 +98,8 @@ class CandidateIn(BaseModel):
     certifications:str=""
     work_history:str=""
     resume_draft_id:str=""
+    employment_preference:str="Unknown"
+    employment_preference_confirmed:str="Unknown"
 
 @app.get("/api/health")
 def health(): return {"status":"ok","app":"Recru Agent","version":"3.0.0"}
@@ -139,6 +141,8 @@ def add_candidate(p:CandidateIn):
         if not name: raise HTTPException(400,"Candidate name is required. Review the resume extraction or enter the name.")
         if (p.sourcing_task_id or "LinkedIn" in p.source_type) and not p.source_evidence.strip():
             raise HTTPException(400,"Add the profile or candidate evidence you reviewed before saving a LinkedIn-sourced candidate.")
+        if p.employment_preference!="Unknown" and p.employment_preference_confirmed!="Candidate confirmed":
+            raise HTTPException(400,"Only record W2/C2C or other engagement preferences after the candidate confirms them.")
         if p.work_auth!="Unknown" and p.work_auth_confirmed!="Candidate confirmed":
             raise HTTPException(400,"Only record OPT or other work authorization as confirmed when the candidate has confirmed it. Otherwise choose Unknown.")
         if p.c2c_status in ("Confirmed","Not available") and p.c2c_confirmed!="Candidate confirmed":
@@ -157,9 +161,9 @@ def add_candidate(p:CandidateIn):
             if not task: raise HTTPException(404,"Sourcing task not found.")
             if task["status"]=="Completed": raise HTTPException(409,"This sourcing task is completed. Reopen it before adding candidates.")
             if task["status"]=="Paused": raise HTTPException(409,"This sourcing task is paused. Resume it before adding candidates.")
-        cur=c.execute("""INSERT INTO candidates(name,email,location,experience,skills,work_auth,c2c_status,linkedin_url,resume_text,created_at,open_to_work,availability_signal,profile_updated,source_type,source_url,source_evidence,c2c_confirmed,work_auth_confirmed,sourcing_task_id,phone,education,certifications,work_history,resume_draft_id)
-          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-          (name,email,location,experience,skills,(p.work_auth if p.work_auth_confirmed=="Candidate confirmed" else "Unknown"),p.c2c_status,linkedin_url,resume_text,now(),p.open_to_work,p.availability_signal,p.profile_updated,p.source_type,source_url,p.source_evidence,p.c2c_confirmed,p.work_auth_confirmed,p.sourcing_task_id,phone,education,certifications,work_history,p.resume_draft_id))
+        cur=c.execute("""INSERT INTO candidates(name,email,location,experience,skills,work_auth,c2c_status,linkedin_url,resume_text,created_at,open_to_work,availability_signal,profile_updated,source_type,source_url,source_evidence,c2c_confirmed,work_auth_confirmed,sourcing_task_id,phone,education,certifications,work_history,resume_draft_id,employment_preference,employment_preference_confirmed)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+          (name,email,location,experience,skills,(p.work_auth if p.work_auth_confirmed=="Candidate confirmed" else "Unknown"),p.c2c_status,linkedin_url,resume_text,now(),p.open_to_work,p.availability_signal,p.profile_updated,p.source_type,source_url,p.source_evidence,p.c2c_confirmed,p.work_auth_confirmed,p.sourcing_task_id,phone,education,certifications,work_history,p.resume_draft_id,(p.employment_preference if p.employment_preference_confirmed=="Candidate confirmed" else "Unknown"),p.employment_preference_confirmed))
         candidate_id=cur.lastrowid
         if p.resume_draft_id:
             c.execute("UPDATE resume_drafts SET status='Attached',candidate_id=?,updated_at=? WHERE id=?",(candidate_id,now(),p.resume_draft_id))
