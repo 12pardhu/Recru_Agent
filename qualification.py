@@ -2,6 +2,7 @@ import json, os, re, sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import APIRouter, HTTPException
+from pipeline import advance_pipeline
 
 ROOT=Path(__file__).parent
 DATA=Path(os.getenv("DATA_DIR",str(ROOT/"data")))
@@ -145,6 +146,7 @@ def evaluate_job_candidates(job_id:int):
             cur=c.execute("INSERT INTO qualification_records(job_id,candidate_id,result_json,overall_status,recruiter_decision,recruiter_notes,evaluated_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
               (job_id,candidate["id"],json.dumps(result),result["overall_status"],"Pending","",stamp(),stamp()))
             created.append(cur.lastrowid)
+            advance_pipeline(candidate["id"],job_id,"Qualification","Candidate evaluated against confirmed job.")
             c.execute("INSERT INTO qualification_events(record_id,event_type,details,created_at) VALUES(?,?,?,?)",(cur.lastrowid,"Qualification generated",result["overall_status"],stamp()))
     return {"job_id":job_id,"evaluated_count":len(created),"message":"Qualification recommendations prepared. Every candidate requires recruiter review."}
 
