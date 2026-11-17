@@ -12,7 +12,7 @@ router=APIRouter(prefix="/api/auth",tags=["Authentication and Access Control"])
 ADMIN_USERNAME=os.getenv("ADMIN_USERNAME","").strip()
 ADMIN_PASSWORD=os.getenv("ADMIN_PASSWORD","")
 SESSION_SECRET=os.getenv("SESSION_SECRET","")
-AUTH_CONFIGURED=bool(ADMIN_USERNAME and ADMIN_PASSWORD and SESSION_SECRET)
+AUTH_CONFIGURED=bool(ADMIN_USERNAME and len(ADMIN_PASSWORD)>=12 and len(SESSION_SECRET)>=32)
 COOKIE_NAME="recru_agent_session"
 SESSION_HOURS=8
 ITERATIONS=310000
@@ -131,6 +131,8 @@ def login(payload:LoginPayload,request:Request,response:Response):
     ip=request.client.host if request.client else "unknown"
     cutoff=(datetime.now(timezone.utc)-timedelta(minutes=15)).isoformat()
     attempts=0
+    with connect() as c:
+        c.execute("DELETE FROM auth_login_attempts WHERE attempted_at<?",(cutoff,))
     with connect() as c:
         attempts=c.execute("SELECT COUNT(*) FROM auth_login_attempts WHERE ip_address=? AND success=0 AND attempted_at>=?",(ip,cutoff)).fetchone()[0]
     if attempts>=5: raise HTTPException(429,"Too many unsuccessful sign-in attempts. Try again in 15 minutes.")
