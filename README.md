@@ -123,6 +123,7 @@ Cloud-hosted recruiter-assist application for US IT staffing. The product is bei
 - Store passwords as salted PBKDF2-HMAC-SHA256 hashes, use random opaque sessions, HttpOnly/SameSite cookies, an 8-hour session expiry, and sign-in rate limiting.
 - Support Admin, Recruiter, and Reviewer roles. Reviewers can update only approval and qualification records; administrators manage users and view the audit log.
 - Record authenticated write actions in an audit log without copying request bodies or candidate content.
+- Provide administrator-controlled user management, password changes, privacy request tracking, candidate erasure, and explicit retention previews/purges.
 - Add security response headers and disable public interactive API documentation.
 - Render Blueprint requests ADMIN_USERNAME, ADMIN_PASSWORD, and SESSION_SECRET as private environment values. Never commit credentials or session secrets.
 - **Release limitation:** this codebase still uses SQLite and local file storage. It does not yet provide multi-tenant row isolation, managed persistent database/storage, encryption at rest, automated backups, or complete privacy/retention/deletion workflows. These infrastructure and governance controls must be completed before real candidate data or external recruiter rollout.
@@ -136,7 +137,7 @@ Configure these environment variables before using the application:
 - `SESSION_SECRET`: a long random secret used to protect session tokens.
 - `AUTH_COOKIE_SECURE=true` on HTTPS hosting; use false only for local HTTP development.
 
-The initial administrator is created once when the application starts with these values. Later password changes should be made from the in-app Account Security section. If credentials are missing, the application intentionally blocks API access and shows an administrator-configuration message.
+The initial administrator is created once when the application starts with these values. ADMIN_PASSWORD must be at least 12 characters and SESSION_SECRET at least 32 characters. Later password changes should be made from the in-app Account Security section. If credentials are missing or too weak, the application intentionally blocks API access and shows an administrator-configuration message.
 
 ## Existing recruiter-assist features
 
