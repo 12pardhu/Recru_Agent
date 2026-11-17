@@ -26,7 +26,7 @@ async def authentication_and_security_middleware(request, call_next):
         if not user:
             return JSONResponse(status_code=401,content={"detail":"Your session has expired or you are not signed in. Please sign in again."})
         if user["role"]=="reviewer" and request.method not in ("GET","HEAD","OPTIONS"):
-            allowed=path.startswith(("/api/approvals","/api/qualification"))
+            allowed=path.startswith(("/api/approvals","/api/qualification","/api/auth/password"))
             if not allowed:
                 return JSONResponse(status_code=403,content={"detail":"Reviewer accounts can update only approval and qualification reviews."})
         request.state.user=user
