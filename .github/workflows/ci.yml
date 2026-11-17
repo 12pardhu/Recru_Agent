@@ -38,7 +38,7 @@ jobs:
               "/api/jd/", "/api/resumes/", "/api/qualification/",
               "/api/screening/", "/api/communications/",
               "/api/submissions/", "/api/interviews/",
-              "/api/pipeline/", "/api/productivity/",
+              "/api/pipeline/", "/api/offers", "/api/productivity/",
               "/api/privacy/", "/api/requirement-intake",
               "/api/platform-sourcing/",
               "/api/communications/interactions",
