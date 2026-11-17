@@ -175,8 +175,12 @@ def update_sourcing_search(search_id:int,payload:dict):
     status=payload.get("status")
     if status not in ("Prepared","In Progress","Completed","Skipped"):
         raise HTTPException(400,"Search status must be Prepared, In Progress, Completed, or Skipped.")
+    parent=rows("SELECT status FROM sourcing_tasks WHERE id=?",(search[0]["task_id"],))
+    if parent and parent[0]["status"]=="Completed": raise HTTPException(409,"This sourcing task is completed. Reopen it before editing searches.")
     with db() as c:
         c.execute("UPDATE sourcing_searches SET status=? WHERE id=?",(status,search_id))
+        if status=="In Progress":
+            c.execute("UPDATE sourcing_tasks SET status='In Progress',started_at=CASE WHEN started_at='' THEN ? ELSE started_at END WHERE id=?",(now(),search[0]["task_id"]))
         c.execute("INSERT INTO sourcing_events(task_id,event_type,details,created_at) VALUES(?,?,?,?)",
           (search[0]["task_id"],"Location search updated",search[0]["location"]+": "+status,now()))
     return {"search_id":search_id,"status":status}
