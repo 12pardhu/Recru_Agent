@@ -205,13 +205,15 @@ def update_user(user_id:int,payload:UserUpdate,request:Request):
     with connect() as c:
         row=c.execute("SELECT id,username,role,active FROM app_users WHERE id=?",(user_id,)).fetchone()
         if not row: raise HTTPException(404,"User not found.")
-        if user_id==request.state.user["id"] and payload.active is False:
-            raise HTTPException(400,"You cannot deactivate your own administrator account.")
         role=payload.role if payload.role is not None else row["role"]
         active=int(payload.active) if payload.active is not None else row["active"]
+        if user_id==request.state.user["id"] and (not active or role!="admin"):
+            other_admins=c.execute("SELECT COUNT(*) FROM app_users WHERE role='admin' AND active=1 AND id<>?",(user_id,)).fetchone()[0]
+            if other_admins==0:
+                raise HTTPException(400,"You cannot deactivate or demote the last active administrator.")
         c.execute("UPDATE app_users SET role=?,active=?,updated_at=? WHERE id=?",(role,active,stamp(),user_id))
         if not active: c.execute("DELETE FROM auth_sessions WHERE user_id=?",(user_id,))
-    return {"id":user_id,"role":role,"active":bool(active)}
+    return {"id":user_id,"username":row["username"],"role":role,"active":bool(active)}
 
 @router.get("/audit")
 def audit_log(request:Request,limit:int=200):
