@@ -172,6 +172,8 @@ def create_pasted_draft(payload: dict):
 async def upload_draft(file: UploadFile = File(...)):
     filename = file.filename or "job-description"
     raw = await file.read(); ext = Path(filename).suffix.lower()
+    if len(raw) > 15 * 1024 * 1024:
+        raise HTTPException(413,"JD files must be 15 MB or smaller.")
     try:
         if ext in (".txt",".md"): text = raw.decode("utf-8-sig",errors="replace")
         elif ext == ".pdf":
