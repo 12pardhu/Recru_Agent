@@ -5,13 +5,42 @@ import csv, io, os, re, sqlite3
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 ROOT=Path(__file__).parent
 DATA=Path(os.getenv("DATA_DIR", str(ROOT/"data")))
 DATA.mkdir(parents=True, exist_ok=True)
 DB=DATA/"recru_agent.db"
-app=FastAPI(title="Recru Agent", version="3.0.0")
+app=FastAPI(title="Recru Agent", version="3.0.0", docs_url=None, redoc_url=None, openapi_url=None)
+from auth import router as auth_router, get_session_user, audit as audit_request, AUTH_CONFIGURED, COOKIE_NAME
+
+@app.middleware("http")
+async def authentication_and_security_middleware(request, call_next):
+    path=request.url.path
+    user=None
+    if path.startswith("/api/") and path not in ("/api/health","/api/auth/login","/api/auth/logout"):
+        if not AUTH_CONFIGURED:
+            return JSONResponse(status_code=503,content={"detail":"Recru Agent authentication is not configured. Set ADMIN_USERNAME, ADMIN_PASSWORD, and SESSION_SECRET before using the application."})
+        user=get_session_user(request.cookies.get(COOKIE_NAME))
+        if not user:
+            return JSONResponse(status_code=401,content={"detail":"Your session has expired or you are not signed in. Please sign in again."})
+        if user["role"]=="reviewer" and request.method not in ("GET","HEAD","OPTIONS"):
+            allowed=path.startswith(("/api/approvals","/api/qualification"))
+            if not allowed:
+                return JSONResponse(status_code=403,content={"detail":"Reviewer accounts can update only approval and qualification reviews."})
+        request.state.user=user
+    response=await call_next(request)
+    if user and request.method not in ("GET","HEAD","OPTIONS"):
+        audit_request(user,request.method,path,response.status_code)
+    response.headers["X-Content-Type-Options"]="nosniff"
+    response.headers["X-Frame-Options"]="DENY"
+    response.headers["Referrer-Policy"]="strict-origin-when-cross-origin"
+    if path.startswith("/api/"):
+        response.headers["Cache-Control"]="no-store"
+    if os.getenv("RENDER"):
+        response.headers["Strict-Transport-Security"]="max-age=31536000; includeSubDomains"
+    return response
 
 def db():
     c=sqlite3.connect(DB); c.row_factory=sqlite3.Row; return c
@@ -104,7 +133,7 @@ class CandidateIn(BaseModel):
     do_not_contact:bool=False
 
 @app.get("/api/health")
-def health(): return {"status":"ok","app":"Recru Agent","version":"3.0.0"}
+def health(): return {"status":"ok","app":"Recru Agent","version":"3.0.0","authentication_configured":AUTH_CONFIGURED}
 @app.get("/api/dashboard")
 def dashboard():
     return {"jobs":len(rows("SELECT id FROM jobs")),"candidates":len(rows("SELECT id FROM candidates")),"pending_approvals":len(rows("SELECT id FROM approvals WHERE status='Pending'")),"sourcing_tasks":len(rows("SELECT id FROM sourcing_tasks"))}
@@ -356,3 +385,4 @@ app.include_router(submissions_router)
 app.include_router(interviews_router)
 app.include_router(pipeline_router)
 app.include_router(productivity_router)
+app.include_router(auth_router)
