@@ -143,7 +143,7 @@ def add_candidate(p:CandidateIn):
             raise HTTPException(400,"Only record OPT or other work authorization as confirmed when the candidate has confirmed it. Otherwise choose Unknown.")
         if p.c2c_status in ("Confirmed","Not available") and p.c2c_confirmed!="Candidate confirmed":
             raise HTTPException(400,"C2C status must be confirmed by the candidate before recording a yes or no.")
-        if linkedin_url and not re.match(r"^https?://(www\\.)?linkedin\\.com/",linkedin_url,re.I):
+        if linkedin_url and not re.match(r"^https?://(www\.)?linkedin\.com/",linkedin_url,re.I):
             raise HTTPException(400,"Enter a valid LinkedIn profile URL.")
         source_url=p.source_url.strip() or linkedin_url
         if source_url and not re.match(r"^https?://",source_url,re.I):
