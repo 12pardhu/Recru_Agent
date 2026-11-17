@@ -3,8 +3,9 @@
 <style>
 :root{font-family:Inter,Segoe UI,Arial,sans-serif;color:#182230;background:#f4f6fa}*{box-sizing:border-box}body{margin:0}.top{background:#172b4d;color:white;padding:22px 5%;display:flex;justify-content:space-between;align-items:center}.top h1{margin:0;font-size:24px}.top small{color:#c7d5e8}.wrap{max-width:1250px;margin:26px auto;padding:0 18px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.stat,.panel{background:white;border:1px solid #e3e8ef;border-radius:12px;padding:18px;box-shadow:0 2px 8px #172b4d0a}.stat b{display:block;font-size:28px;margin-top:7px}.tabs{display:flex;gap:8px;margin:22px 0;flex-wrap:wrap}.tabs button,button{border:0;border-radius:8px;padding:10px 15px;background:#2457a6;color:white;cursor:pointer;font-weight:600}.tabs button{background:#e4eaf4;color:#263b59}.tabs button.active{background:#2457a6;color:white}.panel{margin-bottom:18px}.panel h2{margin:0 0 15px;font-size:19px}label{display:block;font-size:13px;font-weight:650;margin:10px 0 5px}input,textarea,select{width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:7px;font:inherit}textarea{min-height:90px}form .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.wide{grid-column:1/-1}.muted{color:#64748b;font-size:13px}.hidden{display:none}.tablewrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:10px;border-bottom:1px solid #e8edf3;vertical-align:top}th{color:#52627a;background:#f8fafc}.pill{display:inline-block;border-radius:20px;background:#edf3ff;color:#2457a6;padding:3px 8px;font-size:12px}.notice{padding:12px;background:#fff8e6;border:1px solid #f1dfaa;border-radius:8px;margin:14px 0;font-size:13px}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions>*{flex:1}.twocol{display:grid;grid-template-columns:1fr 1fr;gap:12px}.link{word-break:break-all}@media(max-width:750px){.stats{grid-template-columns:1fr 1fr}.grid,form .grid,.twocol{grid-template-columns:1fr}.wide{grid-column:auto}.top{display:block}}
 </style></head><body>
-<header class="top"><div><h1>Recru Agent</h1><small>AI OPT Recruiter Agent · Candidate sourcing workspace</small></div><small>Milestones 1–11 · Development build</small></header>
-<main class="wrap">
+<header class="top"><div><h1>Recru Agent</h1><small>AI OPT Recruiter Agent · Candidate sourcing workspace</small></div><div style="text-align:right"><small>Milestones 1–11 · Development build</small><div id="accountTools" class="hidden" style="margin-top:8px"><small id="accountLabel"></small> <button type="button" id="logoutButton">Sign out</button></div></div></header>
+<div id="loginView" class="wrap hidden"><div class="panel" style="max-width:480px;margin:50px auto"><h2>Sign in to Recru Agent</h2><p class="muted">Use the account provided by your Recru Agent administrator.</p><label>Username</label><input id="loginUsername" autocomplete="username"><label>Password</label><input id="loginPassword" type="password" autocomplete="current-password"><button type="button" id="loginButton" style="margin-top:12px">Sign in</button><p id="loginMessage" class="muted"></p></div></div>
+<main id="appMain" class="wrap hidden">
 <div class="notice"><b>Security notice:</b> This app currently has no login/access control and the free Render filesystem may be temporary. Use fictional test data only. Do not upload real candidate PII or resumes until authentication, persistent storage, and privacy controls are implemented.</div>
 <section class="stats"><div class="stat">Job requirements<b id="jobCount">0</b></div><div class="stat">Candidates<b id="candidateCount">0</b></div><div class="stat">Pending approvals<b id="approvalCount">0</b></div><div class="stat">Sourcing plans<b id="taskCount">0</b></div></section>
 <nav class="tabs"><button class="active" data-tab="jobs">Job Requirements</button><button data-tab="sourcing">Candidate Sourcing</button><button data-tab="candidates">Candidates</button><button data-tab="qualification">Qualification</button><button data-tab="communications">Communications</button><button data-tab="screening">OPT Screening</button><button data-tab="submissions">Client Submissions</button><button data-tab="interviews">Interviews</button><button data-tab="pipeline">Recruitment Pipeline</button><button data-tab="matching">AI Matching</button><button data-tab="approvals">Approvals</button></nav>
@@ -43,7 +44,7 @@
 </main>
 <script>
 const $=s=>document.querySelector(s), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-async function api(path,opts={}){const r=await fetch('/api'+path,{...opts,headers:{...(opts.headers||{}),...(opts.body instanceof FormData?{}:{'Content-Type':'application/json'})}});if(!r.ok){let e={};try{e=await r.json()}catch{}const detail=typeof e.detail==='string'?e.detail:(e.detail&&e.detail.message?e.detail.message:JSON.stringify(e.detail||{}));throw Error(detail||r.statusText)}return r.json()}
+async function api(path,opts={}){const r=await fetch('/api'+path,{credentials:'same-origin',...opts,headers:{...(opts.headers||{}),...(opts.body instanceof FormData?{}:{'Content-Type':'application/json'})}});if(!r.ok){let e={};try{e=await r.json()}catch{}const detail=typeof e.detail==='string'?e.detail:(e.detail&&e.detail.message?e.detail.message:JSON.stringify(e.detail||{}));throw Error(detail||r.statusText)}return r.json()}
 function table(h,rs){return '<table><thead><tr>'+h.map(x=>'<th>'+x+'</th>').join('')+'</tr></thead><tbody>'+(rs.length?rs.join(''):'<tr><td colspan="'+h.length+'">No records yet.</td></tr>')+'</tbody></table>'}
 let jobs=[],people=[],tasks=[],pipelineItems=[];
 async function refresh(){const [d,j,p,a,t]=await Promise.all([api('/dashboard'),api('/jobs'),api('/candidates'),api('/approvals'),api('/sourcing')]);jobs=j;people=p;tasks=t;$('#jobCount').textContent=d.jobs;$('#candidateCount').textContent=d.candidates;$('#approvalCount').textContent=d.pending_approvals;$('#taskCount').textContent=d.sourcing_tasks;
@@ -361,7 +362,22 @@ $('#jdQualityCheck').onclick=async()=>{try{await runJdQuality()}catch(e){$('#jdD
 $('#jdSaveEdits').onclick=async()=>{try{const d=await saveJdReview();showJdDraft(d);$('#jdDraftMessage').textContent='Review edits saved. The requirement is still a draft.'}catch(e){alert(e.message)}};
 $('#jdConfirm').onclick=async()=>{try{const q=await runJdQuality();if(!q.ready_to_confirm)return;if((q.warnings||[]).length&&!$('#jdAcknowledgeWarnings').checked){$('#jdDraftMessage').textContent='Please review the warnings and tick the acknowledgement before confirming.';return;}const r=await api('/jd/drafts/'+activeJdDraft+'/confirm',{method:'POST',body:JSON.stringify({acknowledge_warnings:$('#jdAcknowledgeWarnings').checked})});$('#jdDraftMessage').textContent=r.message+' Job ID: '+r.job_id+'. You can now prepare sourcing from Candidate Sourcing.';$('#jdReview').classList.add('hidden');await refresh()}catch(e){$('#jdDraftMessage').textContent=e.message}};
 
-refreshJdDrafts();
-loadCommunicationTemplates().catch(e=>console.warn(e));
-refresh().catch(e=>console.error(e));
+async function showAuthenticatedApp(user){
+ $('#loginView').classList.add('hidden');$('#appMain').classList.remove('hidden');$('#accountTools').classList.remove('hidden');
+ $('#accountLabel').textContent=user.username+' · '+user.role;
+ if(user.role==='admin'){document.querySelector('[data-tab="security"]').classList.remove('hidden');loadSecurityData().catch(e=>console.warn(e))}
+ refreshJdDrafts();loadCommunicationTemplates().catch(e=>console.warn(e));refresh().catch(e=>console.error(e));
+}
+async function bootstrapAuth(){
+ $('#loginView').classList.remove('hidden');
+ try{
+  const health=await fetch('/api/health',{cache:'no-store'}).then(r=>r.json());
+  if(!health.authentication_configured){$('#loginMessage').textContent='Administrator setup is required before sign-in. Configure ADMIN_USERNAME, ADMIN_PASSWORD, and SESSION_SECRET in the hosting environment.';$('#loginButton').disabled=true;return;}
+  const me=await api('/auth/me');await showAuthenticatedApp(me.user);
+ }catch(e){$('#loginMessage').textContent=e.message==='Failed to fetch'?'Cannot connect to Recru Agent. Refresh the page.':'Please sign in with your account.';}
+}
+$('#loginButton').onclick=async()=>{try{const r=await api('/auth/login',{method:'POST',body:JSON.stringify({username:$('#loginUsername').value,password:$('#loginPassword').value})});$('#loginMessage').textContent='';await showAuthenticatedApp(r.user)}catch(e){$('#loginMessage').textContent=e.message}};
+$('#loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter')$('#loginButton').click()});
+$('#logoutButton').onclick=async()=>{try{await api('/auth/logout',{method:'POST'})}catch(e){}location.reload()};
+bootstrapAuth();
 </script></body></html>
