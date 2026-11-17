@@ -1,6 +1,6 @@
 # Recru Agent
 
-Cloud-hosted recruiter-assist application for US IT staffing. The product is being developed in 12 milestones. The current development branch contains the completed development implementation for **Milestone 1 — Job Requirement Intelligence** **Milestone 2 — Candidate Sourcing Intelligence** **Milestone 3 — Resume Intelligence** **Milestone 4 — Candidate Qualification** **Milestone 5 — Candidate Communication** and the in-progress **Milestone 6 — OPT Recruiter Screening**. Runtime verification and formal test/sign-off are intentionally deferred until all 12 development milestones are built.
+Cloud-hosted recruiter-assist application for US IT staffing. The product is being developed in 12 milestones. The current development branch contains the completed development implementation for **Milestone 1 — Job Requirement Intelligence** **Milestone 2 — Candidate Sourcing Intelligence** **Milestone 3 — Resume Intelligence** **Milestone 4 — Candidate Qualification** **Milestone 5 — Candidate Communication** **Milestone 6 — OPT Recruiter Screening** and the in-progress **Milestone 7 — Advanced AI Matching**. Runtime verification and formal test/sign-off are intentionally deferred until all 12 development milestones are built.
 
 ## Milestone 1: Job Requirement Intelligence
 
@@ -69,6 +69,17 @@ Cloud-hosted recruiter-assist application for US IT staffing. The product is bei
 - Track session status, recruiter notes, and activity history.
 - Screening is recruiter recordkeeping, not immigration/legal advice. Do not store passport numbers, SSNs, or unnecessary sensitive identifiers.
 
+## Milestone 7: Advanced Matching (in development)
+
+- Produce explainable candidate-to-job scores with criterion-level weights and evidence.
+- Compare mandatory and preferred skills, experience, location, candidate-confirmed work authorization, candidate-confirmed engagement type, and candidate-reported availability.
+- Normalize selected common technology skill variants.
+- Show score bands and missing/unknown evidence; insufficient job criteria produce an insufficient-data result rather than a misleading score.
+- Store matching runs and recruiter decisions/notes.
+- Matching is advisory only. It does not automatically reject candidates, contact candidates, or submit profiles.
+
+**Important:** this version uses deterministic, explainable rules; it is not a connected LLM and does not guarantee candidate suitability.
+
 ## Existing recruiter-assist features
 
 - Prepare LinkedIn People Search URLs for the recruiter to open in their authorized LinkedIn session.
@@ -112,4 +123,4 @@ No login, role-based access control, tenant isolation, managed persistent databa
 11. Recruiter Productivity Dashboard
 12. Security, Quality and Release
 
-Milestone 1 development implementation is complete; its runtime verification and test/sign-off remain deferred. Milestone 2 development implementation is complete; runtime verification and testing remain deferred. Milestone 3 development implementation is complete; runtime verification and testing remain deferred. Milestone 4 development implementation is complete; runtime verification and testing remain deferred. Milestone 5 development implementation is complete; runtime verification and testing remain deferred. Milestone 6 is under development.
+Milestone 1 development implementation is complete; its runtime verification and test/sign-off remain deferred. Milestone 2 development implementation is complete; runtime verification and testing remain deferred. Milestone 3 development implementation is complete; runtime verification and testing remain deferred. Milestone 4 development implementation is complete; runtime verification and testing remain deferred. Milestone 5 development implementation is complete; runtime verification and testing remain deferred. Milestone 6 development implementation is complete; runtime verification and testing remain deferred. Milestone 7 is under development.
