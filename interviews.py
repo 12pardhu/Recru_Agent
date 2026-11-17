@@ -28,15 +28,15 @@ def validate_schedule(value, timezone_name):
         parsed = datetime.fromisoformat(raw.replace("Z","+00:00"))
     except ValueError:
         raise HTTPException(400,"Enter a valid date and time, for example 2026-11-20T14:30.")
-    if parsed.date() < datetime.now().date():
-        raise HTTPException(400,"Interview date cannot be in the past.")
     zone = str(timezone_name or "").strip()
     if not zone:
         raise HTTPException(400,"Select the interview time zone.")
     try:
-        ZoneInfo(zone)
+        local_zone = ZoneInfo(zone)
     except ZoneInfoNotFoundError:
         raise HTTPException(400,"Use a valid IANA time zone such as America/Chicago or America/New_York.")
+    if parsed.date() < datetime.now(local_zone).date():
+        raise HTTPException(400,"Interview date cannot be in the past in the selected time zone.")
     return raw, zone
 
 def init():
@@ -73,6 +73,7 @@ def create_interview(payload:dict):
     if fmt not in ("Video","Phone","Onsite"): raise HTTPException(400,"Choose Video, Phone, or Onsite.")
     link=str(payload.get("meeting_link","")).strip()
     if link and not re.match(r"^https?://",link,re.I): raise HTTPException(400,"Meeting link must begin with http:// or https://.")
+    if fmt=="Onsite" and not str(payload.get("meeting_location","")).strip(): raise HTTPException(400,"Enter the onsite interview location.")
     round_number=int(payload.get("round_number",1))
     if round_number<1 or round_number>20: raise HTTPException(400,"Interview round must be between 1 and 20.")
     existing=rows("SELECT id FROM interviews WHERE submission_id=? AND round_number=? AND status NOT IN ('Cancelled','No Show')",(submission_id,round_number))
@@ -159,7 +160,8 @@ def interview_feedback(interview_id:int,payload:dict):
     outcome=payload.get("outcome","Pending")
     allowed=("Strong Hire","Hire","No Hire","Maybe","Additional Round","Pending")
     if outcome not in allowed: raise HTTPException(400,"Choose a valid interview outcome.")
-    feedback=str(payload.get("feedback",""))
+    if outcome=="Pending": raise HTTPException(400,"Select an interview outcome before saving final feedback.")
+    feedback=str(payload.get("feedback","")).strip()
     with connect() as c:
         c.execute("UPDATE interviews SET feedback=?,outcome=?,status='Completed',updated_at=? WHERE id=?",(feedback,outcome,stamp(),interview_id))
         c.execute("INSERT INTO interview_events(interview_id,event_type,details,created_at) VALUES(?,?,?,?)",(interview_id,"Interview feedback recorded",outcome+" · "+feedback,stamp()))
