@@ -28,7 +28,7 @@ def init():
         """)
         migrations={
           "jobs":{"domain":"TEXT DEFAULT ''","preferred_skills":"TEXT DEFAULT ''","employment_type":"TEXT DEFAULT 'Unknown'","source_mode":"TEXT DEFAULT 'both'"},
-          "candidates":{"open_to_work":"TEXT DEFAULT 'Unknown'","availability_signal":"TEXT DEFAULT 'Unknown'","profile_updated":"TEXT DEFAULT ''","source_type":"TEXT DEFAULT 'Manual'","source_url":"TEXT DEFAULT ''","source_evidence":"TEXT DEFAULT ''","c2c_confirmed":"TEXT DEFAULT 'Unknown'","sourcing_task_id":"INTEGER"}
+          "candidates":{"open_to_work":"TEXT DEFAULT 'Unknown'","availability_signal":"TEXT DEFAULT 'Unknown'","profile_updated":"TEXT DEFAULT ''","source_type":"TEXT DEFAULT 'Manual'","source_url":"TEXT DEFAULT ''","source_evidence":"TEXT DEFAULT ''","c2c_confirmed":"TEXT DEFAULT 'Unknown'","work_auth_confirmed":"TEXT DEFAULT 'Unknown'","sourcing_task_id":"INTEGER"}
         }
         migrations["sourcing_tasks"]={"target_count":"INTEGER DEFAULT 50","notes":"TEXT DEFAULT ''","started_at":"TEXT DEFAULT ''","completed_at":"TEXT DEFAULT ''"}
         for table,cols in migrations.items():
@@ -82,6 +82,7 @@ class CandidateIn(BaseModel):
     work_auth:str="Unknown"
     c2c_status:str="Unknown"
     c2c_confirmed:str="Unknown"
+    work_auth_confirmed:str="Unknown"
     linkedin_url:str=""
     resume_text:str=""
     open_to_work:str="Unknown"
@@ -111,6 +112,9 @@ def get_candidates(): return rows("SELECT * FROM candidates ORDER BY id DESC")
 @app.post("/api/candidates")
 def add_candidate(p:CandidateIn):
     if not p.name.strip(): raise HTTPException(400,"Candidate name is required")
+    if p.sourcing_task_id and not p.source_evidence.strip(): raise HTTPException(400,"Add the profile or candidate evidence you reviewed before linking this candidate to a sourcing task.")
+    if p.work_auth!="Unknown" and p.work_auth_confirmed!="Candidate confirmed": raise HTTPException(400,"Only record OPT or other work authorization as confirmed when the candidate has confirmed it. Otherwise choose Unknown.")
+    if p.c2c_status in ("Confirmed","Not available") and p.c2c_confirmed!="Candidate confirmed": raise HTTPException(400,"C2C status must be confirmed by the candidate before recording a yes or no.")
     if p.linkedin_url and not re.match(r"^https?://(www\.)?linkedin\.com/",p.linkedin_url.strip(),re.I): raise HTTPException(400,"Enter a valid LinkedIn profile URL")
     with db() as c:
         if p.email and c.execute("SELECT id FROM candidates WHERE lower(email)=lower(?) AND email<>''",(p.email,)).fetchone(): raise HTTPException(409,"Possible duplicate: a candidate with this email already exists")
@@ -120,8 +124,8 @@ def add_candidate(p:CandidateIn):
             if not task: raise HTTPException(404,"Sourcing task not found.")
             if task["status"]=="Completed": raise HTTPException(409,"This sourcing task is completed. Reopen it before adding more candidates.")
             if task["status"]=="Paused": raise HTTPException(409,"This sourcing task is paused. Resume it before adding candidates.")
-        cur=c.execute("""INSERT INTO candidates(name,email,location,experience,skills,work_auth,c2c_status,linkedin_url,resume_text,created_at,open_to_work,availability_signal,profile_updated,source_type,source_url,source_evidence,c2c_confirmed,sourcing_task_id)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(p.name,p.email,p.location,p.experience,p.skills,p.work_auth,p.c2c_status,p.linkedin_url,p.resume_text,now(),p.open_to_work,p.availability_signal,p.profile_updated,p.source_type,p.source_url,p.source_evidence,p.c2c_confirmed,p.sourcing_task_id))
+        cur=c.execute("""INSERT INTO candidates(name,email,location,experience,skills,work_auth,c2c_status,linkedin_url,resume_text,created_at,open_to_work,availability_signal,profile_updated,source_type,source_url,source_evidence,c2c_confirmed,work_auth_confirmed,sourcing_task_id)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(p.name,p.email,p.location,p.experience,p.skills,(p.work_auth if p.work_auth_confirmed=="Candidate confirmed" else "Unknown"),p.c2c_status,p.linkedin_url,p.resume_text,now(),p.open_to_work,p.availability_signal,p.profile_updated,p.source_type,p.source_url,p.source_evidence,p.c2c_confirmed,p.work_auth_confirmed,p.sourcing_task_id))
         if p.sourcing_task_id:
             c.execute("UPDATE sourcing_tasks SET status=CASE WHEN status='Prepared' THEN 'In Progress' ELSE status END WHERE id=?",(p.sourcing_task_id,))
             c.execute("INSERT INTO sourcing_events(task_id,event_type,details,created_at) VALUES(?,?,?,?)",(p.sourcing_task_id,"Candidate captured","Candidate record #"+str(cur.lastrowid),now()))
