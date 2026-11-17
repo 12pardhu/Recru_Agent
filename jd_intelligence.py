@@ -204,10 +204,6 @@ def confirm_draft(draft_id: str, payload: dict = None):
     d = read_draft(draft_id)
     if d["status"] == "Confirmed": return {"job_id":d["confirmed_job_id"],"message":"Already confirmed."}
     f = d["analysis"]["fields"]; report = quality_report(d["jd_text"],f)
-    for key in d["analysis"].get("evidence",{}):
-        d["analysis"]["evidence"][key]["status"] = "Recruiter confirmed"
-    with connect() as evidence_conn:
-        evidence_conn.execute("UPDATE jd_drafts SET extracted_json=? WHERE id=?",(json.dumps(d["analysis"]),draft_id))
     if not report["ready_to_confirm"]:
         raise HTTPException(400,{"message":"Resolve the blocking fields before confirming.","quality":report})
     if report["warnings"] and not (payload or {}).get("acknowledge_warnings"):
@@ -216,9 +212,12 @@ def confirm_draft(draft_id: str, payload: dict = None):
     locations = f.get("locations") or []; location = "; ".join(locations) if isinstance(locations,list) else str(locations)
     skills = ", ".join(f.get("mandatory_skills") or []); preferred = ", ".join(f.get("preferred_skills") or [])
     auth = ", ".join(f.get("work_authorization") or []) or "Unknown"
+    for key in d["analysis"].get("evidence",{}):
+        d["analysis"]["evidence"][key]["status"] = "Recruiter confirmed"
     employment_value = f.get("employment_type") or ["Unknown"]
     employment = ", ".join(employment_value if isinstance(employment_value,list) else [str(employment_value)])
     with connect() as c:
+        c.execute("UPDATE jd_drafts SET extracted_json=? WHERE id=?",(json.dumps(d["analysis"]),draft_id))
         existing_job_id = d.get("confirmed_job_id")
         if existing_job_id:
             current = c.execute("SELECT id FROM jobs WHERE id=?",(existing_job_id,)).fetchone()
