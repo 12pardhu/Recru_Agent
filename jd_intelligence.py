@@ -25,6 +25,9 @@ def init():
         CREATE TABLE IF NOT EXISTS jd_drafts(id TEXT PRIMARY KEY, original_filename TEXT DEFAULT '', stored_path TEXT DEFAULT '', jd_text TEXT NOT NULL, extracted_json TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'Needs review', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, confirmed_job_id INTEGER);
         CREATE TABLE IF NOT EXISTS job_versions(id INTEGER PRIMARY KEY, job_id INTEGER NOT NULL, version INTEGER NOT NULL, snapshot_json TEXT NOT NULL, changed_at TEXT NOT NULL, changed_by TEXT DEFAULT 'Recruiter', UNIQUE(job_id,version));
         """)
+        job_columns = {r["name"] for r in c.execute("PRAGMA table_info(jobs)")}
+        if "structured_json" not in job_columns:
+            c.execute("ALTER TABLE jobs ADD COLUMN structured_json TEXT DEFAULT '{}'")
 init()
 
 SKILLS = ["Java","Spring Boot","Microservices","REST API","SQL","PostgreSQL","Python","JavaScript","TypeScript","React","Node.js","AWS","Azure","GCP","Machine Learning","Deep Learning","PyTorch","TensorFlow","LLM","Spark","Kafka","Docker","Kubernetes","Jenkins","CI/CD","Snowflake","Databricks","C#",".NET","Terraform","Salesforce","GenAI","LangChain","RAG","Power BI","Tableau","Oracle","MongoDB","Redis"]
@@ -322,12 +325,12 @@ def confirm_draft(draft_id: str, payload: dict = None):
         if existing_job_id:
             current = c.execute("SELECT id FROM jobs WHERE id=?",(existing_job_id,)).fetchone()
             if not current: raise HTTPException(404,"The requirement being revised no longer exists.")
-            c.execute("UPDATE jobs SET title=?,location=?,min_experience=?,skills=?,work_auth=?,jd_text=?,domain=?,preferred_skills=?,employment_type=? WHERE id=?",
-              (title,location,f.get("min_experience"),skills,auth,d["jd_text"],f.get("domain",""),preferred,employment,existing_job_id))
+            c.execute("UPDATE jobs SET title=?,location=?,min_experience=?,skills=?,work_auth=?,jd_text=?,domain=?,preferred_skills=?,employment_type=?,structured_json=? WHERE id=?",
+              (title,location,f.get("min_experience"),skills,auth,d["jd_text"],f.get("domain",""),preferred,employment,json.dumps(f),existing_job_id))
             jid = existing_job_id
             version = c.execute("SELECT COALESCE(MAX(version),0)+1 AS next_version FROM job_versions WHERE job_id=?",(jid,)).fetchone()["next_version"]
         else:
-            cur = c.execute("INSERT INTO jobs(title,location,min_experience,skills,work_auth,jd_text,created_at,domain,preferred_skills,employment_type,source_mode) VALUES(?,?,?,?,?,?,?,?,?,?,?)",(title,location,int(f.get("min_experience") or 0),skills,auth,d["jd_text"],stamp(),f.get("domain",""),preferred,employment,"both"))
+            cur = c.execute("INSERT INTO jobs(title,location,min_experience,skills,work_auth,jd_text,created_at,domain,preferred_skills,employment_type,source_mode,structured_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",(title,location,int(f.get("min_experience") or 0),skills,auth,d["jd_text"],stamp(),f.get("domain",""),preferred,employment,"both",json.dumps(f)))
             jid = cur.lastrowid
             version = 1
         c.execute("INSERT INTO job_versions(job_id,version,snapshot_json,changed_at) VALUES(?,?,?,?)",(jid,version,json.dumps({"fields":f,"evidence":d["analysis"].get("evidence",{}),"quality":report}),stamp()))
@@ -340,16 +343,22 @@ def create_revision_draft(job_id: int):
         job = c.execute("SELECT * FROM jobs WHERE id=?",(job_id,)).fetchone()
     if not job: raise HTTPException(404,"Job not found")
     job = dict(job)
-    fields = {
-      "title":job["title"],"domain":job.get("domain",""),
-      "locations":[x.strip() for x in (job.get("location") or "").split(";") if x.strip()],
-      "min_experience":job.get("min_experience"),"relevant_experience":None,"technology_experience":{},
-      "mandatory_skills":[x.strip() for x in (job.get("skills") or "").split(",") if x.strip()],
-      "preferred_skills":[x.strip() for x in (job.get("preferred_skills") or "").split(",") if x.strip()],"optional_skills":[],"technology_versions":{},
-      "work_authorization":[x.strip() for x in (job.get("work_auth") or "").split(",") if x.strip() and x.strip()!="Unknown"],
-      "employment_type":[x.strip() for x in (job.get("employment_type") or "Unknown").split(",") if x.strip()],
-      "rate":"","work_arrangement":[],"responsibilities":"","education":"","certifications":"","travel":"","relocation":""
-    }
+    fields = {}
+    try:
+        fields = json.loads(job.get("structured_json") or "{}")
+    except (TypeError, ValueError):
+        fields = {}
+    if not fields:
+        fields = {
+          "title":job["title"],"domain":job.get("domain",""),
+          "locations":[x.strip() for x in (job.get("location") or "").split(";") if x.strip()],
+          "min_experience":job.get("min_experience"),"relevant_experience":None,"technology_experience":{},
+          "mandatory_skills":[x.strip() for x in (job.get("skills") or "").split(",") if x.strip()],
+          "preferred_skills":[x.strip() for x in (job.get("preferred_skills") or "").split(",") if x.strip()],"optional_skills":[],"technology_versions":{},
+          "work_authorization":[x.strip() for x in (job.get("work_auth") or "").split(",") if x.strip() and x.strip()!="Unknown"],
+          "employment_type":[x.strip() for x in (job.get("employment_type") or "Unknown").split(",") if x.strip()],
+          "rate":"","work_arrangement":[],"responsibilities":"","education":"","certifications":"","travel":"","relocation":""
+        }
     result = {"fields":fields,"evidence":{k:{"status":"Needs review","evidence":"Copied from the previously confirmed requirement"} for k in fields}}
     did = str(uuid.uuid4())
     with connect() as c:
