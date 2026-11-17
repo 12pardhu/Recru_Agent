@@ -43,7 +43,7 @@ window.makeApproval=async candidate_id=>{try{await api('/approvals',{method:'POS
 window.decision=async(id,status)=>{try{await api('/approvals/'+id,{method:'PATCH',body:JSON.stringify({status})});await refresh()}catch(e){alert(e.message)}};
 
 let activeJdDraft = null;
-const splitList = s => s.split(/[,;\\n]/).map(x=>x.trim()).filter(Boolean);
+const splitList = s => s.split(/[,;\n]/).map(x=>x.trim()).filter(Boolean);
 function showJdDraft(d){
  activeJdDraft=d.id; const f=d.analysis.fields;
  $('#rvTitle').value=f.title||''; $('#rvDomain').value=f.domain||'';
@@ -74,5 +74,6 @@ $('#jdAnalyzeFile').onclick=async()=>{const f=$('#jdDraftFile').files[0];if(!f)r
 $('#jdAnalyzeText').onclick=async()=>{try{const d=await api('/jd/drafts',{method:'POST',body:JSON.stringify({jd_text:$('#jdPaste').value})});showJdDraft(d)}catch(e){$('#jdDraftMessage').textContent=e.message}};
 $('#jdSaveEdits').onclick=async()=>{try{const d=await saveJdReview();showJdDraft(d);$('#jdDraftMessage').textContent='Review edits saved. The requirement is still a draft.'}catch(e){alert(e.message)}};
 $('#jdConfirm').onclick=async()=>{try{await saveJdReview();const r=await api('/jd/drafts/'+activeJdDraft+'/confirm',{method:'POST'});$('#jdDraftMessage').textContent=r.message+' Job ID: '+r.job_id+'. You can now prepare sourcing from Candidate Sourcing.';$('#jdReview').classList.add('hidden');await refresh()}catch(e){$('#jdDraftMessage').textContent=e.message}};
-\nrefresh().catch(e=>console.error(e));
+
+refresh().catch(e=>console.error(e));
 </script></body></html>
