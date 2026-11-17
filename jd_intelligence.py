@@ -211,11 +211,44 @@ def confirm_draft(draft_id: str, payload: dict = None):
     employment_value = f.get("employment_type") or ["Unknown"]
     employment = ", ".join(employment_value if isinstance(employment_value,list) else [str(employment_value)])
     with connect() as c:
-        cur = c.execute("INSERT INTO jobs(title,location,min_experience,skills,work_auth,jd_text,created_at,domain,preferred_skills,employment_type,source_mode) VALUES(?,?,?,?,?,?,?,?,?,?,?)",(title,location,int(f.get("min_experience") or 0),skills,auth,d["jd_text"],stamp(),f.get("domain",""),preferred,employment,"both"))
-        jid = cur.lastrowid
-        c.execute("INSERT INTO job_versions(job_id,version,snapshot_json,changed_at) VALUES(?,1,?,?)",(jid,json.dumps({"fields":f,"quality":report}),stamp()))
-        c.execute("UPDATE jd_drafts SET status='Confirmed',confirmed_job_id=?,updated_at=? WHERE id=?",(jid,stamp(),draft_id))
+        existing_job_id = d.get("confirmed_job_id")
+        if existing_job_id:
+            current = c.execute("SELECT id FROM jobs WHERE id=?",(existing_job_id,)).fetchone()
+            if not current: raise HTTPException(404,"The requirement being revised no longer exists.")
+            c.execute("UPDATE jobs SET title=?,location=?,min_experience=?,skills=?,work_auth=?,jd_text=?,domain=?,preferred_skills=?,employment_type=? WHERE id=?",
+              (title,location,int(f.get("min_experience") or 0),skills,auth,d["jd_text"],f.get("domain",""),preferred,employment,existing_job_id))
+            jid = existing_job_id
+            version = c.execute("SELECT COALESCE(MAX(version),0)+1 AS next_version FROM job_versions WHERE job_id=?",(jid,)).fetchone()["next_version"]
+        else:
+            cur = c.execute("INSERT INTO jobs(title,location,min_experience,skills,work_auth,jd_text,created_at,domain,preferred_skills,employment_type,source_mode) VALUES(?,?,?,?,?,?,?,?,?,?,?)",(title,location,int(f.get("min_experience") or 0),skills,auth,d["jd_text"],stamp(),f.get("domain",""),preferred,employment,"both"))
+            jid = cur.lastrowid
+            version = 1
+        c.execute("INSERT INTO job_versions(job_id,version,snapshot_json,changed_at) VALUES(?,?,?,?)",(jid,version,json.dumps({"fields":f,"quality":report}),stamp()))
+        c.execute("UPDATE jd_drafts SET status='Confirmed',updated_at=? WHERE id=?",(stamp(),draft_id))
     return {"job_id":jid,"message":"Requirement confirmed and saved. Sourcing has not started; use Candidate Sourcing when ready.","quality":report}
+
+@router.post("/jobs/{job_id}/revision")
+def create_revision_draft(job_id: int):
+    with connect() as c:
+        job = c.execute("SELECT * FROM jobs WHERE id=?",(job_id,)).fetchone()
+    if not job: raise HTTPException(404,"Job not found")
+    job = dict(job)
+    fields = {
+      "title":job["title"],"domain":job.get("domain",""),
+      "locations":[x.strip() for x in (job.get("location") or "").split(";") if x.strip()],
+      "min_experience":job.get("min_experience"),"relevant_experience":None,"technology_experience":{},
+      "mandatory_skills":[x.strip() for x in (job.get("skills") or "").split(",") if x.strip()],
+      "preferred_skills":[x.strip() for x in (job.get("preferred_skills") or "").split(",") if x.strip()],
+      "work_authorization":[x.strip() for x in (job.get("work_auth") or "").split(",") if x.strip() and x.strip()!="Unknown"],
+      "employment_type":[x.strip() for x in (job.get("employment_type") or "Unknown").split(",") if x.strip()],
+      "rate":"","work_arrangement":[],"responsibilities":""
+    }
+    result = {"fields":fields,"evidence":{k:{"status":"Needs review","evidence":"Copied from the previously confirmed requirement"} for k in fields}}
+    did = str(uuid.uuid4())
+    with connect() as c:
+        c.execute("INSERT INTO jd_drafts(id,original_filename,stored_path,jd_text,extracted_json,status,created_at,updated_at,confirmed_job_id) VALUES(?,?,?,?,?,'Needs review',?,?,?)",
+          (did,"Revision of Job #"+str(job_id),"",job.get("jd_text",""),json.dumps(result),stamp(),stamp(),job_id))
+    return read_draft(did)
 
 @router.get("/jobs/{job_id}/versions")
 def get_versions(job_id: int):
