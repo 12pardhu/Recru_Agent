@@ -101,6 +101,8 @@ def erase_candidate(candidate_id:int, reason:str):
             marks=",".join("?" for _ in pipeline_ids)
             c.execute("DELETE FROM pipeline_events WHERE pipeline_id IN ("+marks+")",pipeline_ids)
             c.execute("DELETE FROM recruitment_pipeline WHERE id IN ("+marks+")",pipeline_ids)
+        # Remove candidate-specific matching snapshots as they may contain copied profile evidence in result_json.
+        c.execute("DELETE FROM match_results WHERE candidate_id=?",(candidate_id,))
         c.execute("DELETE FROM approvals WHERE candidate_id=?",(candidate_id,))
         if resume_ids:
             marks=",".join("?" for _ in resume_ids)
