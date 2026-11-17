@@ -47,6 +47,21 @@ def verify_readiness(candidate_id,job_id,screening_session_id):
     session=sessions[0]
     if session["status"]!="Completed": raise HTTPException(409,"Complete recruiter screening before client submission.")
     if session["submission_consent"]!="Yes": raise HTTPException(409,"Explicit candidate consent to submit this profile to this client/role is required.")
+    if session.get("rtr_required"):
+        rtrs=rows("SELECT * FROM candidate_rtr_records WHERE screening_session_id=? ORDER BY id DESC LIMIT 1",(screening_session_id,))
+        if not rtrs or rtrs[0]["status"]!="Signed":
+            raise HTTPException(409,"A signed, job-specific RTR is required before submission.")
+        expiry=rtrs[0].get("expires_at") or ""
+        if expiry:
+            try:
+                expiry_dt=datetime.fromisoformat(expiry.replace("Z","+00:00"))
+                if expiry_dt.tzinfo is None:
+                    expiry_dt=expiry_dt.replace(tzinfo=timezone.utc)
+                if expiry_dt <= datetime.now(timezone.utc):
+                    raise HTTPException(409,"The job-specific RTR has expired. Obtain a new signed RTR before submission.")
+            except ValueError:
+                raise HTTPException(409,"RTR expiry date is invalid. Correct the RTR record before submission.")
+
     quals=rows("""SELECT * FROM qualification_records WHERE candidate_id=? AND job_id=?
       ORDER BY id DESC LIMIT 1""",(candidate_id,job_id))
     if not quals or quals[0]["recruiter_decision"]!="Proceed to Client Submission":
