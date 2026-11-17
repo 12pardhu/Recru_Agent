@@ -124,6 +124,10 @@ def update_session(session_id:int,payload:dict):
         raise HTTPException(400,"Invalid screening status.")
     consent=payload.get("submission_consent",sessions[0]["submission_consent"])
     if consent not in ("Unknown","Yes","No"): raise HTTPException(400,"Submission consent must be Unknown, Yes, or No.")
+    if consent!=sessions[0]["submission_consent"]:
+        consent_answer=rows("SELECT answer,confirmation_status FROM screening_answers WHERE session_id=? AND question_key='candidate_consent_to_submit'",(session_id,))
+        if not consent_answer or consent_answer[0]["confirmation_status"]!="Candidate confirmed" or consent_answer[0]["answer"].strip().lower()!=consent.lower():
+            raise HTTPException(409,"Submission consent can only be updated from the candidate-confirmed screening answer.")
     scheduled=str(payload.get("scheduled_at",sessions[0]["scheduled_at"]))
     notes=str(payload.get("recruiter_notes",sessions[0]["recruiter_notes"]))
     completed=stamp() if status=="Completed" else ""
@@ -166,7 +170,9 @@ def apply_confirmed_answers(session_id:int):
         except ValueError: pass
     if confirmed("availability"):
         value=answers["availability"]["answer"].strip()
-        if value: updates["availability_signal"]="Actively looking" if "actively looking" in value.lower() else "Interested"
+        if "actively looking" in value.lower(): updates["availability_signal"]="Actively looking"
+        elif "interested" in value.lower() or "open to opportunities" in value.lower(): updates["availability_signal"]="Interested"
+        elif "not looking" in value.lower() or "not interested" in value.lower(): updates["availability_signal"]="Not looking"
     consent=answers.get("candidate_consent_to_submit")
     submission_consent="Unknown"
     if confirmed("candidate_consent_to_submit"):
