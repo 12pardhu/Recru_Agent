@@ -111,7 +111,7 @@ async function loadInterviewData(){
   const current=$('#interviewSelect').value;
   $('#interviewSelect').innerHTML=items.map(x=>'<option value="'+x.id+'">#'+x.id+' · '+esc(x.candidate_name)+' · '+esc(x.round_name)+' · '+esc(x.scheduled_at)+'</option>').join('');
   if(items.some(x=>String(x.id)===current))$('#interviewSelect').value=current;else if(items.length)$('#interviewSelect').value=items[0].id;
-  $('#interviewList').innerHTML=table(['Candidate','Job','Client','Round','Date/time','Candidate confirmation','Status','Action'],items.map(x=>'<tr><td>'+esc(x.candidate_name)+'</td><td>'+esc(x.job_title)+'</td><td>'+esc(x.company_name)+'</td><td>'+esc(x.round_name)+'</td><td>'+esc(x.scheduled_at)+' '+esc(x.timezone)+'</td><td>'+esc(x.candidate_confirmation)+'</td><td>'+esc(x.status)+'</td><td><button type="button" onclick="openInterview('+x.id+')">Open</button></td></tr>'));
+  $('#interviewList').innerHTML=table(['Candidate','Job','Client','Round','Date/time and zone','Format','Candidate confirmation','Status','Action'],items.map(x=>'<tr><td>'+esc(x.candidate_name)+'</td><td>'+esc(x.job_title)+'</td><td>'+esc(x.company_name)+'</td><td>'+esc(x.round_number)+' · '+esc(x.round_name)+'</td><td>'+esc(x.scheduled_at)+' '+esc(x.timezone)+'</td><td>'+esc(x.format)+'</td><td>'+esc(x.candidate_confirmation)+'</td><td>'+esc(x.status)+'</td><td><button type="button" onclick="openInterview('+x.id+')">Open</button></td></tr>'));
   if(items.length)await loadInterview();
  }catch(e){$('#interviewMessage').textContent=e.message}
 }
