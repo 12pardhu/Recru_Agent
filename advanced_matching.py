@@ -23,7 +23,7 @@ def tokens(value):
 
 ALIASES={
  "springboot":"spring boot","spring framework":"spring boot",
- "restful":"rest api","rest apis":"rest api","rest":"rest api",
+ "restful":"rest api","rest apis":"rest api","restapi":"rest api","rest":"rest api",
  "postgres":"postgresql","k8s":"kubernetes","amazon web services":"aws",
  "ml":"machine learning","gen ai":"genai","node":"node.js"
 }
