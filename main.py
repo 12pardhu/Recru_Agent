@@ -168,6 +168,18 @@ def sourcing_tasks():
 def sourcing_searches(task_id:int):
     if not rows("SELECT id FROM sourcing_tasks WHERE id=?",(task_id,)): raise HTTPException(404,"Sourcing task not found.")
     return rows("SELECT * FROM sourcing_searches WHERE task_id=? ORDER BY id",(task_id,))
+@app.patch("/api/sourcing/searches/{search_id}")
+def update_sourcing_search(search_id:int,payload:dict):
+    search=rows("SELECT * FROM sourcing_searches WHERE id=?",(search_id,))
+    if not search: raise HTTPException(404,"Sourcing search not found.")
+    status=payload.get("status")
+    if status not in ("Prepared","In Progress","Completed","Skipped"):
+        raise HTTPException(400,"Search status must be Prepared, In Progress, Completed, or Skipped.")
+    with db() as c:
+        c.execute("UPDATE sourcing_searches SET status=? WHERE id=?",(status,search_id))
+        c.execute("INSERT INTO sourcing_events(task_id,event_type,details,created_at) VALUES(?,?,?,?)",
+          (search[0]["task_id"],"Location search updated",search[0]["location"]+": "+status,now()))
+    return {"search_id":search_id,"status":status}
 @app.get("/api/sourcing/{task_id}/activity")
 def sourcing_activity(task_id:int):
     if not rows("SELECT id FROM sourcing_tasks WHERE id=?",(task_id,)): raise HTTPException(404,"Sourcing task not found.")
