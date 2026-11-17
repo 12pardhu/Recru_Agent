@@ -188,4 +188,4 @@ Milestone 10 development implementation is complete; runtime verification and te
 
 Milestone 11 development implementation is complete; runtime verification and testing remain deferred.
 
-Milestone 12 security implementation is in progress; infrastructure hardening and formal release sign-off are still required.
+Milestone 12 application-level security and privacy implementation is complete; persistent storage, deployment hardening, formal security review, milestone testing, and release sign-off remain required. See SECURITY_RELEASE_CHECKLIST.md.
