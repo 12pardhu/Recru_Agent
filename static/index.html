@@ -34,10 +34,13 @@ const currentTask=$('#sourceTaskControl').value;$('#sourceTaskControl').innerHTM
 $('#candidateSourcingTask').innerHTML='<option value="">Manual / not linked</option>'+taskOpts;
 $('#communicationCandidate').innerHTML=p.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' — '+esc(x.location)+'</option>').join('');
 $('#communicationJob').innerHTML='<option value="">General / no job selected</option>'+opts;
+$('#screenCandidate').innerHTML=p.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' — '+esc(x.location)+'</option>').join('');
+$('#screenJob').innerHTML=opts;
 $('#approvalList').innerHTML=table(['Candidate','Job','Status','Notes','Action'],a.map(x=>'<tr><td>'+esc(x.candidate_name)+'</td><td>'+esc(x.job_title)+'</td><td>'+esc(x.status)+'</td><td>'+esc(x.notes)+'</td><td>'+(x.status==='Pending'?'<button onclick="decision('+x.id+',\'Approved\')">Approve</button> <button onclick="decision('+x.id+',\'Rejected\')">Reject</button>':'—')+'</td></tr>'));
 $('#sourceHistory').innerHTML=table(['Job','Progress','Status','Notes','Created'],t.map(x=>'<tr><td>'+esc(x.job_title)+'</td><td>'+x.added_count+'/'+x.target_count+'</td><td>'+esc(x.status)+'</td><td>'+esc(x.notes||'')+'</td><td>'+esc(x.created_at)+'</td></tr>'));
 if(t.length) loadSourcingTask().catch(e=>console.warn(e));
 loadCommunicationMessages().catch(e=>console.warn(e));
+loadScreeningSessions().catch(e=>console.warn(e));
 }
 async function loadQualifications(){
  const id=$('#qualificationJob').value;if(!id)return;
@@ -81,6 +84,33 @@ $('#runMatch').onclick=async()=>{const id=$('#matchJob').value;if(!id)return ale
 window.makeApproval=async candidate_id=>{try{await api('/approvals',{method:'POST',body:JSON.stringify({candidate_id,job_id:Number($('#matchJob').value)})});await refresh();alert('Added to approval queue.')}catch(e){alert(e.message)}};
 window.decision=async(id,status)=>{try{await api('/approvals/'+id,{method:'PATCH',body:JSON.stringify({status})});await refresh()}catch(e){alert(e.message)}};
 
+let currentScreening=null;
+async function loadScreeningSessions(){
+ try{
+  const ss=await api('/screening/sessions');
+  const current=$('#screenSession').value;
+  $('#screenSession').innerHTML=ss.map(s=>'<option value="'+s.id+'">#'+s.id+' · '+esc(s.candidate_name)+' · '+esc(s.job_title)+'</option>').join('');
+  if(ss.some(s=>String(s.id)===current))$('#screenSession').value=current;else if(ss.length)$('#screenSession').value=ss[0].id;
+  $('#screenSessionList').innerHTML=table(['Candidate','Job','Status','Submission consent','Created','Action'],ss.map(s=>'<tr><td>'+esc(s.candidate_name)+'</td><td>'+esc(s.job_title)+'</td><td>'+esc(s.status)+'</td><td>'+esc(s.submission_consent)+'</td><td>'+esc(s.created_at)+'</td><td><button type="button" onclick="openScreeningSession('+s.id+')">Open</button></td></tr>'));
+  if(ss.length) await loadScreeningSession();
+ }catch(e){$('#screeningMessage').textContent=e.message}
+}
+window.openScreeningSession=async id=>{$('#screenSession').value=id;await loadScreeningSession()};
+async function loadScreeningSession(){
+ const id=$('#screenSession').value;if(!id)return;
+ currentScreening=await api('/screening/sessions/'+id);
+ $('#screenStatus').value=currentScreening.status;
+ $('#screenConsent').value=currentScreening.submission_consent||'Unknown';
+ $('#screenScheduledEdit').value=currentScreening.scheduled_at||'';
+ $('#screenNotes').value=currentScreening.recruiter_notes||'';
+ $('#screenAnswers').innerHTML=currentScreening.answers.map(a=>'<div class="panel"><b>'+esc(a.category)+' — '+esc(a.question)+'</b><label>Candidate answer</label><textarea id="screen-answer-'+a.question_key+'">'+esc(a.answer||'')+'</textarea><div class="twocol"><div><label>Confirmation status</label><select id="screen-confirm-'+a.question_key+'"><option '+(a.confirmation_status==='Unknown'?'selected':'')+'>Unknown</option><option '+(a.confirmation_status==='Candidate confirmed'?'selected':'')+'>Candidate confirmed</option><option '+(a.confirmation_status==='Not confirmed'?'selected':'')+'>Not confirmed</option></select></div><div><label>Evidence / recruiter note</label><input id="screen-evidence-'+a.question_key+'" value="'+esc(a.evidence||'')+'"></div></div></div>').join('');
+ $('#screenHistory').innerHTML=table(['Event','Details','Time'],(currentScreening.events||[]).map(e=>'<tr><td>'+esc(e.event_type)+'</td><td>'+esc(e.details)+'</td><td>'+esc(e.created_at)+'</td></tr>'));
+}
+$('#screenSession').onchange=()=>loadScreeningSession().catch(e=>alert(e.message));
+$('#createScreening').onclick=async()=>{const candidate_id=Number($('#screenCandidate').value),job_id=Number($('#screenJob').value);if(!candidate_id||!job_id)return alert('Select a candidate and confirmed job.');try{const s=await api('/screening/sessions',{method:'POST',body:JSON.stringify({candidate_id,job_id,scheduled_at:$('#screenScheduled').value})});$('#screeningMessage').textContent=s.message;await loadScreeningSessions();$('#screenSession').value=s.id;await loadScreeningSession()}catch(e){$('#screeningMessage').textContent=e.message}};
+$('#saveScreenAnswers').onclick=async()=>{if(!currentScreening)return;try{for(const a of currentScreening.answers){await api('/screening/sessions/'+currentScreening.id+'/answers/'+a.question_key,{method:'PATCH',body:JSON.stringify({answer:$('#screen-answer-'+a.question_key).value,confirmation_status:$('#screen-confirm-'+a.question_key).value,evidence:$('#screen-evidence-'+a.question_key).value})})}$('#screeningMessage').textContent='All screening answers saved.';await loadScreeningSession()}catch(e){$('#screeningMessage').textContent=e.message}};
+$('#saveScreenSession').onclick=async()=>{if(!currentScreening)return;try{await api('/screening/sessions/'+currentScreening.id,{method:'PATCH',body:JSON.stringify({status:$('#screenStatus').value,scheduled_at:$('#screenScheduledEdit').value,recruiter_notes:$('#screenNotes').value})});$('#screeningMessage').textContent='Screening session updated.';await loadScreeningSessions()}catch(e){$('#screeningMessage').textContent=e.message}};
+$('#applyScreenAnswers').onclick=async()=>{if(!currentScreening)return;try{await $('#saveScreenAnswers').click();const r=await api('/screening/sessions/'+currentScreening.id+'/apply-confirmed',{method:'POST'});$('#screeningMessage').textContent=r.message+' Updated fields: '+r.updated_candidate_fields.join(', ')+'; consent: '+r.submission_consent+'.';await refresh();await loadScreeningSession()}catch(e){$('#screeningMessage').textContent=e.message}};
 let communicationTemplates=[];
 async function loadCommunicationTemplates(){
  communicationTemplates=await api('/communications/templates');
