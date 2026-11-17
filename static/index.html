@@ -8,8 +8,8 @@
 <div class="notice"><b>Security notice:</b> This app currently has no login/access control and the free Render filesystem may be temporary. Use fictional test data only. Do not upload real candidate PII or resumes until authentication, persistent storage, and privacy controls are implemented.</div>
 <section class="stats"><div class="stat">Job requirements<b id="jobCount">0</b></div><div class="stat">Candidates<b id="candidateCount">0</b></div><div class="stat">Pending approvals<b id="approvalCount">0</b></div><div class="stat">Sourcing plans<b id="taskCount">0</b></div></section>
 <nav class="tabs"><button class="active" data-tab="jobs">Job Requirements</button><button data-tab="sourcing">Candidate Sourcing</button><button data-tab="candidates">Candidates</button><button data-tab="matching">AI Matching</button><button data-tab="approvals">Approvals</button></nav>
-<section id="jobs" class="tab">
-<div class="panel"><h2>Upload or enter Job Description</h2><div class="actions"><input id="jdFile" type="file" accept=".txt,.md,.pdf,.docx"><button type="button" id="uploadJd">Analyze JD File</button></div><p class="muted">Supported: TXT, MD, PDF, DOCX. Scanned PDFs require OCR. The current analyzer uses transparent keyword/rule extraction, not an external AI model.</p>
+<section id="jobs" class="tab"><div class="panel" id="jdIntelligence"><h2>Job Description Intelligence — Review Before Saving</h2><p class="muted">Upload a PDF, DOCX, TXT or MD file, or paste the JD. Recru Agent creates a draft first. Review and edit every extracted field, then confirm to save the requirement. No sourcing starts before confirmation.</p><div class="twocol"><div><label>Upload original JD</label><input id="jdDraftFile" type="file" accept=".pdf,.docx,.txt,.md"><button type="button" id="jdAnalyzeFile" style="margin-top:8px">Analyze uploaded JD</button></div><div><label>Or paste the complete JD</label><textarea id="jdPaste" placeholder="Paste job description here..."></textarea><button type="button" id="jdAnalyzeText" style="margin-top:8px">Analyze pasted JD</button></div></div><p id="jdDraftMessage" class="muted"></p><div id="jdDraftHistory" class="muted"></div><div id="jdReview" class="hidden"><div class="notice">Review required. Fields marked Missing were not found. Do not guess; leave unknown information blank or set it to Unknown.</div><div class="grid"><div><label>Job title</label><input id="rvTitle"></div><div><label>Domain</label><input id="rvDomain"></div><div><label>Locations (separate with semicolons)</label><input id="rvLocations"></div><div><label>Minimum experience (years)</label><input id="rvExperience" type="number" min="0"></div><div><label>Mandatory skills (comma-separated)</label><input id="rvMandatory"></div><div><label>Preferred skills (comma-separated)</label><input id="rvPreferred"></div><div><label>Work authorization (comma-separated; Unknown if not stated)</label><input id="rvAuth"></div><div><label>Employment type</label><input id="rvEmployment"></div><div><label>Rate / compensation</label><input id="rvRate"></div><div><label>Work arrangement</label><input id="rvArrangement"></div></div><label>Original JD text (preserved; edits here update the draft text)</label><textarea id="rvOriginal" style="min-height:160px"></textarea><p id="jdEvidence" class="muted"></p><div class="actions"><button type="button" id="jdSaveEdits">Save review edits</button><button type="button" id="jdConfirm">Confirm & Save Requirement</button></div></div></div>
+<div class="panel" style="display:none"><h2>Legacy Job Entry</h2><div class="actions"><input id="jdFile" type="file" accept=".txt,.md,.pdf,.docx"><button type="button" id="uploadJd">Analyze JD File</button></div><p class="muted">Supported: TXT, MD, PDF, DOCX. Scanned PDFs require OCR. The current analyzer uses transparent keyword/rule extraction, not an external AI model.</p>
 <form id="jobForm" class="grid"><div><label>Job title *</label><input name="title" required placeholder="Java Developer"></div><div><label>Domain</label><input name="domain" placeholder="Software Engineering"></div><div><label>Location(s)</label><input name="location" placeholder="Dallas, TX; Austin, TX"></div><div><label>Minimum experience (years)</label><input name="min_experience" type="number" min="0" value="4"></div><div><label>Mandatory skills</label><input name="skills" placeholder="Java, Spring Boot, Microservices"></div><div><label>Preferred skills</label><input name="preferred_skills" placeholder="AWS, Kafka"></div><div><label>Work authorization</label><select name="work_auth"><option>Unknown</option><option>OPT</option><option>STEM OPT</option><option>H-1B</option><option>Green Card</option><option>US Citizen</option><option>Any US work authorization</option></select></div><div><label>Employment type</label><select name="employment_type"><option>Unknown</option><option>W2</option><option>C2C</option><option>Contract-to-Hire</option><option>Full-time</option></select></div><div class="wide"><label>Full job description</label><textarea name="jd_text" placeholder="Paste the complete JD here..."></textarea></div><div class="wide"><label>Sourcing workflow</label><select name="source_mode"><option value="both">Both: automatic preparation + recruiter-triggered search</option><option value="automatic">Automatic preparation after saving JD</option><option value="manual">Recruiter-triggered only</option></select></div><div class="wide"><button>Save Requirement & Prepare Sourcing</button></div></form><p id="jobMsg" class="muted"></p></div>
 <div class="panel"><h2>Saved Requirements</h2><div id="jobsList" class="tablewrap"></div></div></section>
 <section id="sourcing" class="tab hidden"><div class="panel"><h2>LinkedIn Candidate Sourcing</h2><p>Recru Agent prepares a JD-specific LinkedIn People search automatically. You can also trigger it manually after reviewing or editing the search terms.</p><div class="notice">LinkedIn profile results are not automatically scraped. Use the generated LinkedIn search in your authorized account, review profiles, and add candidates with the visible evidence. Open to Work is a profile signal, not confirmation that a person is available for a particular role.</div><label>Select job</label><select id="sourceJob"></select><label>Search keywords</label><input id="sourceQuery"><div class="actions" style="margin-top:12px"><button id="prepareSource">Prepare / Refresh Search</button><button id="openLinkedin">Open LinkedIn People Search</button></div><p id="sourceLink" class="muted link"></p><div id="sourceHistory" class="tablewrap"></div></div></section>
@@ -41,5 +41,46 @@ $('#openLinkedin').onclick=()=>{const id=$('#sourceJob').value;if(!id)return ale
 $('#runMatch').onclick=async()=>{const id=$('#matchJob').value;if(!id)return alert('Create a job first.');try{const r=await api('/jobs/'+id+'/match',{method:'POST'});$('#matchResults').innerHTML=table(['Candidate','Score','Base','Open to Work','Matched skills','Missing skills','Authorization','Action'],r.map(x=>'<tr><td>'+esc(x.candidate.name)+'</td><td><b>'+x.score+'%</b></td><td>'+x.base_match+'%</td><td>'+esc(x.open_to_work)+'</td><td>'+esc(x.matched_skills.join(', '))+'</td><td>'+esc(x.missing_skills.join(', '))+'</td><td>'+esc(x.candidate.work_auth)+'</td><td><button onclick="makeApproval('+x.candidate.id+')">Request review</button></td></tr>'))}catch(e){alert(e.message)}};
 window.makeApproval=async candidate_id=>{try{await api('/approvals',{method:'POST',body:JSON.stringify({candidate_id,job_id:Number($('#matchJob').value)})});await refresh();alert('Added to approval queue.')}catch(e){alert(e.message)}};
 window.decision=async(id,status)=>{try{await api('/approvals/'+id,{method:'PATCH',body:JSON.stringify({status})});await refresh()}catch(e){alert(e.message)}};
+
+let activeJdDraft = null;
+const splitList = s => s.split(/[,;\n]/).map(x=>x.trim()).filter(Boolean);
+
+async function refreshJdDrafts(){
+ try{const ds=await api('/jd/drafts');$('#jdDraftHistory').innerHTML='<h3>Saved JD drafts</h3>'+table(['Original file','Status','Last updated','Action'],ds.map(d=>'<tr><td>'+esc(d.original_filename||'Pasted JD')+'</td><td>'+esc(d.status)+'</td><td>'+esc(d.updated_at)+'</td><td><button type="button" onclick="reopenJdDraft(\''+d.id+'\')">Review draft</button></td></tr>'))}catch(e){$('#jdDraftHistory').textContent='Draft history unavailable: '+e.message}
+}
+window.reopenJdDraft=async id=>{try{const d=await api('/jd/drafts/'+id);showJdDraft(d)}catch(e){alert(e.message)}};
+
+function showJdDraft(d){
+ activeJdDraft=d.id; const f=d.analysis.fields;
+ $('#rvTitle').value=f.title||''; $('#rvDomain').value=f.domain||'';
+ $('#rvLocations').value=(f.locations||[]).join('; ');
+ $('#rvExperience').value=f.min_experience??'';
+ $('#rvMandatory').value=(f.mandatory_skills||[]).join(', ');
+ $('#rvPreferred').value=(f.preferred_skills||[]).join(', ');
+ $('#rvAuth').value=(f.work_authorization||[]).join(', ')||'Unknown';
+ $('#rvEmployment').value=f.employment_type||'Unknown';
+ $('#rvRate').value=f.rate||''; $('#rvArrangement').value=f.work_arrangement||'';
+ $('#rvOriginal').value=d.jd_text||''; $('#jdReview').classList.remove('hidden');
+ const ev=d.analysis.evidence||{};
+ $('#jdEvidence').textContent='Field review status: '+Object.entries(ev).map(([k,v])=>k+': '+v.status).join(' | ');
+ $('#jdDraftMessage').textContent='Draft created — '+d.status+'. Original file: '+(d.original_filename||'pasted text')+'. Review the extracted fields below.'; refreshJdDrafts();
+}
+function jdFields(){
+ return {title:$('#rvTitle').value.trim(),domain:$('#rvDomain').value.trim(),locations:splitList($('#rvLocations').value),
+ min_experience:$('#rvExperience').value===''?null:Number($('#rvExperience').value),
+ mandatory_skills:splitList($('#rvMandatory').value),preferred_skills:splitList($('#rvPreferred').value),
+ work_authorization:splitList($('#rvAuth').value).filter(x=>x!=='Unknown'),employment_type:$('#rvEmployment').value.trim()||'Unknown',
+ rate:$('#rvRate').value.trim(),work_arrangement:$('#rvArrangement').value.trim()};
+}
+async function saveJdReview(){
+ if(!activeJdDraft)throw Error('Analyze a JD first.');
+ return api('/jd/drafts/'+activeJdDraft,{method:'PATCH',body:JSON.stringify({fields:jdFields(),jd_text:$('#rvOriginal').value})});
+}
+$('#jdAnalyzeFile').onclick=async()=>{const f=$('#jdDraftFile').files[0];if(!f)return alert('Choose a JD file first.');const fd=new FormData();fd.append('file',f);try{const d=await api('/jd/drafts/upload',{method:'POST',body:fd});showJdDraft(d)}catch(e){$('#jdDraftMessage').textContent=e.message}};
+$('#jdAnalyzeText').onclick=async()=>{try{const d=await api('/jd/drafts',{method:'POST',body:JSON.stringify({jd_text:$('#jdPaste').value})});showJdDraft(d)}catch(e){$('#jdDraftMessage').textContent=e.message}};
+$('#jdSaveEdits').onclick=async()=>{try{const d=await saveJdReview();showJdDraft(d);$('#jdDraftMessage').textContent='Review edits saved. The requirement is still a draft.'}catch(e){alert(e.message)}};
+$('#jdConfirm').onclick=async()=>{try{await saveJdReview();const r=await api('/jd/drafts/'+activeJdDraft+'/confirm',{method:'POST'});$('#jdDraftMessage').textContent=r.message+' Job ID: '+r.job_id+'. You can now prepare sourcing from Candidate Sourcing.';$('#jdReview').classList.add('hidden');await refresh()}catch(e){$('#jdDraftMessage').textContent=e.message}};
+
+refreshJdDrafts();
 refresh().catch(e=>console.error(e));
 </script></body></html>

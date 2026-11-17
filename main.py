@@ -101,8 +101,7 @@ def add_job(j:JobIn):
     with db() as c:
         cur=c.execute("INSERT INTO jobs(title,location,min_experience,skills,work_auth,jd_text,created_at,domain,preferred_skills,employment_type,source_mode) VALUES(?,?,?,?,?,?,?,?,?,?,?)",(j.title.strip(),j.location,j.min_experience,j.skills,j.work_auth,j.jd_text,now(),j.domain,j.preferred_skills,j.employment_type,j.source_mode))
         jid=cur.lastrowid
-    # Both modes are prepared at intake. Auto mode creates a task; recruiter can also run it on demand.
-    return {"id":jid,"message":"Requirement saved; sourcing plan can now be prepared","sourcing_plan":build_plan(jid)}
+    return {"id":jid,"message":"Requirement saved without sourcing. Use Job Requirement Intelligence to review and confirm before sourcing."}
 @app.get("/api/candidates")
 def get_candidates(): return rows("SELECT * FROM candidates ORDER BY id DESC")
 @app.post("/api/candidates")
@@ -119,6 +118,9 @@ def build_plan(job_id):
     js=rows("SELECT * FROM jobs WHERE id=?",(job_id,))
     if not js: raise HTTPException(404,"Job not found")
     j=js[0]
+    # Only recruiter-confirmed JD records (with a version snapshot) may enter sourcing.
+    if not rows("SELECT id FROM job_versions WHERE job_id=? LIMIT 1",(job_id,)):
+        raise HTTPException(409,"This requirement has not completed recruiter review and confirmation. Use the JD review workflow first.")
     # Use role-specific terms and all JD locations; omit broad inferred domain labels.
     # Authorization terms are search hints only, never proof of a candidate's status.
     auth_terms=j.get("work_auth","")
@@ -152,6 +154,8 @@ async def upload_jd(file:UploadFile=File(...)):
 def match(job_id:int):
     js=rows("SELECT * FROM jobs WHERE id=?",(job_id,))
     if not js: raise HTTPException(404,"Job not found")
+    if not rows("SELECT id FROM job_versions WHERE job_id=? LIMIT 1",(job_id,)):
+        raise HTTPException(409,"Confirm the job requirement before running candidate matching.")
     j=js[0]; required={x.lower() for x in tokens(j["skills"])}; preferred={x.lower() for x in tokens(j.get("preferred_skills",""))}
     out=[]
     for p in rows("SELECT * FROM candidates"):
@@ -192,3 +196,8 @@ def export_candidates():
 app.mount("/static",StaticFiles(directory=ROOT/"static"),name="static")
 @app.get("/",response_class=HTMLResponse)
 def home(): return (ROOT/"static"/"index.html").read_text(encoding="utf-8")
+
+
+# Milestone 1: reviewed JD drafts and recruiter confirmation.
+from jd_intelligence import router as jd_router
+app.include_router(jd_router)
