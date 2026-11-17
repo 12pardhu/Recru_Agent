@@ -52,7 +52,10 @@ def analyze(text):
     low = text.lower()
 
     # Total and role-specific experience are kept separate; no ambiguous value is silently substituted.
-    total = re.search(r"(?:total\s+)?(\d+)\s*\+?\s*(?:years?|yrs?)(?:\s+of\s+(?:total\s+)?experience)?", text, re.I)
+    total = re.search(r"total\s+experience\s*(?:of|:)?\s*(\d+)\s*\+?\s*(?:years?|yrs?)", text, re.I)
+    if not total:
+        total = next((m for m in re.finditer(r"(\d+)\s*\+?\s*(?:years?|yrs?)", text, re.I)
+                      if not re.match(r"\s*(?:of\s+)?(?:relevant|related|hands-on)", text[m.end():], re.I)), None)
     relevant = re.search(r"(\d+)\s*\+?\s*(?:years?|yrs?)\s+(?:of\s+)?(?:relevant|related|hands-on)\s+experience", text, re.I)
     tech_years = {}
     for skill in SKILLS:
@@ -63,7 +66,7 @@ def analyze(text):
     locations = []
     if loc_match:
         # Keep city/state pairs intact; semicolon, slash, pipe and explicit "and" delimit locations.
-        locations = [x.strip(" ,") for x in re.split(r"\s*(?:;|\||/|\band\b)\s*", loc_match.group(1)) if x.strip(" ,")]
+        locations = [x.strip(" ,") for x in re.split(r"\s*(?:;|\||/|\band\b|,\s*(?=[A-Z][A-Za-z .'-]+,\s*[A-Z]{2}\b))\s*", loc_match.group(1)) if x.strip(" ,")]
     else:
         m = re.search(r"\b(?:based in|location is)\s+([^\n.]+)", text, re.I)
         if m: locations = [m.group(1).strip()]
