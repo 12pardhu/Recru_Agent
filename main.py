@@ -330,4 +330,6 @@ def home(): return (ROOT/"static"/"index.html").read_text(encoding="utf-8")
 
 # Milestone 1: reviewed JD drafts and recruiter confirmation.
 from jd_intelligence import router as jd_router
+from resume_intelligence import router as resume_router
 app.include_router(jd_router)
+app.include_router(resume_router)
