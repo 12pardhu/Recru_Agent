@@ -159,7 +159,7 @@ def add_candidate(p:CandidateIn):
         if linkedin_url and c.execute("SELECT id FROM candidates WHERE lower(linkedin_url)=lower(?) AND linkedin_url<>''",(linkedin_url,)).fetchone():
             raise HTTPException(409,"Possible duplicate: this LinkedIn profile is already saved.")
         if p.sourcing_task_id:
-            task=c.execute("SELECT id,status FROM sourcing_tasks WHERE id=?",(p.sourcing_task_id,)).fetchone()
+            task=c.execute("SELECT id,status,job_id FROM sourcing_tasks WHERE id=?",(p.sourcing_task_id,)).fetchone()
             if not task: raise HTTPException(404,"Sourcing task not found.")
             if task["status"]=="Completed": raise HTTPException(409,"This sourcing task is completed. Reopen it before adding candidates.")
             if task["status"]=="Paused": raise HTTPException(409,"This sourcing task is paused. Resume it before adding candidates.")
@@ -172,6 +172,7 @@ def add_candidate(p:CandidateIn):
         if p.sourcing_task_id:
             c.execute("UPDATE sourcing_tasks SET status=CASE WHEN status='Prepared' THEN 'In Progress' ELSE status END WHERE id=?",(p.sourcing_task_id,))
             c.execute("INSERT INTO sourcing_events(task_id,event_type,details,created_at) VALUES(?,?,?,?)",(p.sourcing_task_id,"Candidate captured","Candidate record #"+str(candidate_id),now()))
+            ensure_pipeline(candidate_id,task["job_id"],"Sourcing")
         return {"id":candidate_id,"message":"Candidate saved with reviewed resume" if p.resume_draft_id else ("Candidate saved with sourcing provenance" if p.sourcing_task_id else "Candidate saved")}
 def build_plan(job_id, target_count=50):
     js=rows("SELECT * FROM jobs WHERE id=?",(job_id,))
@@ -343,6 +344,7 @@ from screening import router as screening_router
 from advanced_matching import router as advanced_matching_router
 from submissions import router as submissions_router
 from interviews import router as interviews_router
+from pipeline import router as pipeline_router, ensure_pipeline, advance_pipeline
 app.include_router(jd_router)
 app.include_router(resume_router)
 app.include_router(qualification_router)
@@ -351,3 +353,4 @@ app.include_router(screening_router)
 app.include_router(advanced_matching_router)
 app.include_router(submissions_router)
 app.include_router(interviews_router)
+app.include_router(pipeline_router)
