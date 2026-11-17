@@ -244,8 +244,9 @@ def match(job_id:int):
         required_exp=j.get("min_experience")
         exp_score=(15 if p["experience"]>=required_exp else round(15*p["experience"]/required_exp)) if required_exp is not None and required_exp>0 else 0
         loc_score=10 if not j["location"] or j["location"].lower() in p["location"].lower() else 0
-        auth_match=bool(j["work_auth"]=="Unknown" or p["work_auth"].lower()==j["work_auth"].lower() or j["work_auth"]=="Any US work authorization")
-        auth_score=10 if auth_match and p["work_auth"]!="Unknown" else (5 if j["work_auth"]=="Unknown" else 0)
+        candidate_auth=p["work_auth"] if p.get("work_auth_confirmed")=="Candidate confirmed" else "Unknown"
+        auth_match=bool(j["work_auth"]=="Unknown" or candidate_auth.lower()==j["work_auth"].lower() or j["work_auth"]=="Any US work authorization")
+        auth_score=10 if auth_match and candidate_auth!="Unknown" else (5 if j["work_auth"]=="Unknown" else 0)
         base=min(100,skill_score+exp_score+loc_score+auth_score+min(5,len(pref)*2))
         otw=p.get("open_to_work","Unknown")
         priority={"Yes":10,"Actively looking":10,"Interested":6,"No":0,"Unknown":0}.get(otw,0)
