@@ -375,6 +375,7 @@ from submissions import router as submissions_router
 from interviews import router as interviews_router
 from pipeline import router as pipeline_router, ensure_pipeline, advance_pipeline
 from productivity import router as productivity_router
+from privacy import router as privacy_router
 app.include_router(jd_router)
 app.include_router(resume_router)
 app.include_router(qualification_router)
@@ -386,3 +387,4 @@ app.include_router(interviews_router)
 app.include_router(pipeline_router)
 app.include_router(productivity_router)
 app.include_router(auth_router)
+app.include_router(privacy_router)
