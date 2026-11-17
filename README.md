@@ -165,7 +165,7 @@ Render Blueprint is in `render.yaml`. The free service filesystem may be ephemer
 
 ## Not production-ready
 
-No login, role-based access control, tenant isolation, managed persistent database, or full privacy/retention controls are included. Use fictional data only until security and privacy safeguards are implemented. Matching is advisory only; recruiters must verify candidate statements and approve every next step.
+Application-level login, role-based access, audit logging, and admin privacy/retention workflows are implemented. However, there is no multi-tenant row isolation, managed persistent database/file storage, verified encryption at rest, automated backup/restore, or external security assessment. Use fictional data only until the release gates in SECURITY_RELEASE_CHECKLIST.md are completed. Matching is advisory only; recruiters must verify candidate statements and approve every next step.
 
 ## Development roadmap
 
