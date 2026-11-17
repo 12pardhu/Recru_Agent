@@ -28,7 +28,7 @@ def init():
         """)
         migrations={
           "jobs":{"domain":"TEXT DEFAULT ''","preferred_skills":"TEXT DEFAULT ''","employment_type":"TEXT DEFAULT 'Unknown'","source_mode":"TEXT DEFAULT 'both'"},
-          "candidates":{"open_to_work":"TEXT DEFAULT 'Unknown'","availability_signal":"TEXT DEFAULT 'Unknown'","profile_updated":"TEXT DEFAULT ''","source_type":"TEXT DEFAULT 'Manual'","source_url":"TEXT DEFAULT ''","source_evidence":"TEXT DEFAULT ''","c2c_confirmed":"TEXT DEFAULT 'Unknown'","work_auth_confirmed":"TEXT DEFAULT 'Unknown'","sourcing_task_id":"INTEGER"}
+          "candidates":{"open_to_work":"TEXT DEFAULT 'Unknown'","availability_signal":"TEXT DEFAULT 'Unknown'","profile_updated":"TEXT DEFAULT ''","source_type":"TEXT DEFAULT 'Manual'","source_url":"TEXT DEFAULT ''","source_evidence":"TEXT DEFAULT ''","c2c_confirmed":"TEXT DEFAULT 'Unknown'","work_auth_confirmed":"TEXT DEFAULT 'Unknown'","sourcing_task_id":"INTEGER","phone":"TEXT DEFAULT ''","education":"TEXT DEFAULT ''","certifications":"TEXT DEFAULT ''","work_history":"TEXT DEFAULT ''","resume_draft_id":"TEXT DEFAULT ''"}
         }
         migrations["sourcing_tasks"]={"target_count":"INTEGER DEFAULT 50","notes":"TEXT DEFAULT ''","started_at":"TEXT DEFAULT ''","completed_at":"TEXT DEFAULT ''"}
         migrations["sourcing_searches"]={"search_type":"TEXT DEFAULT 'Role + skills'"}
@@ -93,6 +93,11 @@ class CandidateIn(BaseModel):
     source_url:str=""
     source_evidence:str=""
     sourcing_task_id:int|None=None
+    phone:str=""
+    education:str=""
+    certifications:str=""
+    work_history:str=""
+    resume_draft_id:str=""
 
 @app.get("/api/health")
 def health(): return {"status":"ok","app":"Recru Agent","version":"3.0.0"}
