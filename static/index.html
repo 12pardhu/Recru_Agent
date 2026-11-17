@@ -95,7 +95,7 @@ async function loadCommunicationMessages(){
  $('#communicationList').innerHTML=table(['Candidate','Job','Channel','Status','Created','Actions'],ms.map(m=>{
   let actions='';
   if(m.status==='Draft') actions='<button type="button" onclick="editCommunication('+m.id+')">Edit</button> <button type="button" onclick="submitCommunication('+m.id+')">Submit for approval</button>';
-  if(m.status==='Pending Approval') actions='<button type="button" onclick="approveCommunication('+m.id+')">Approve</button>';
+  if(m.status==='Pending Approval') actions='<button type="button" onclick="editCommunication('+m.id+')">Review</button> <button type="button" onclick="approveCommunication('+m.id+')">Approve</button>';
   if(m.status==='Approved') actions='<button type="button" onclick="markCommunicationSent('+m.id+')">Record manually sent</button>';
   if(!['Manually Sent','Cancelled'].includes(m.status)) actions+=' <button type="button" onclick="cancelCommunication('+m.id+')">Cancel</button>';
   return '<tr><td>'+esc(m.candidate_name)+'</td><td>'+esc(m.job_title||'General')+'</td><td>'+esc(m.channel)+'</td><td>'+esc(m.status)+'</td><td>'+esc(m.created_at)+'</td><td>'+actions+'</td></tr>';
