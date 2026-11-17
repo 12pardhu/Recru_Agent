@@ -44,6 +44,7 @@ if(t.length) loadSourcingTask().catch(e=>console.warn(e));
 loadCommunicationMessages().catch(e=>console.warn(e));
 loadScreeningSessions().catch(e=>console.warn(e));
 loadSubmissionData().catch(e=>console.warn(e));
+loadInterviewData().catch(e=>console.warn(e));
 }
 async function loadQualifications(){
  const id=$('#qualificationJob').value;if(!id)return;
@@ -103,6 +104,32 @@ $('#runMatch').onclick=async()=>{const id=$('#matchJob').value;if(!id)return ale
 window.makeApproval=async candidate_id=>{try{await api('/approvals',{method:'POST',body:JSON.stringify({candidate_id,job_id:Number($('#matchJob').value)})});await refresh();alert('Added to approval queue.')}catch(e){alert(e.message)}};
 window.decision=async(id,status)=>{try{await api('/approvals/'+id,{method:'PATCH',body:JSON.stringify({status})});await refresh()}catch(e){alert(e.message)}};
 
+async function loadInterviewData(){
+ try{
+  const [subs,items]=await Promise.all([api('/submissions'),api('/interviews')]);
+  $('#interviewSubmission').innerHTML=subs.filter(s=>(s.status==='Manually Submitted'||s.status==='Client Feedback')&&s.feedback_status==='Interview Requested').map(s=>'<option value="'+s.id+'">#'+s.id+' · '+esc(s.candidate_name)+' · '+esc(s.company_name)+' · '+esc(s.job_title)+'</option>').join('');
+  const current=$('#interviewSelect').value;
+  $('#interviewSelect').innerHTML=items.map(x=>'<option value="'+x.id+'">#'+x.id+' · '+esc(x.candidate_name)+' · '+esc(x.round_name)+' · '+esc(x.scheduled_at)+'</option>').join('');
+  if(items.some(x=>String(x.id)===current))$('#interviewSelect').value=current;else if(items.length)$('#interviewSelect').value=items[0].id;
+  $('#interviewList').innerHTML=table(['Candidate','Job','Client','Round','Date/time','Candidate confirmation','Status','Action'],items.map(x=>'<tr><td>'+esc(x.candidate_name)+'</td><td>'+esc(x.job_title)+'</td><td>'+esc(x.company_name)+'</td><td>'+esc(x.round_name)+'</td><td>'+esc(x.scheduled_at)+' '+esc(x.timezone)+'</td><td>'+esc(x.candidate_confirmation)+'</td><td>'+esc(x.status)+'</td><td><button type="button" onclick="openInterview('+x.id+')">Open</button></td></tr>'));
+  if(items.length)await loadInterview();
+ }catch(e){$('#interviewMessage').textContent=e.message}
+}
+window.openInterview=async id=>{$('#interviewSelect').value=id;await loadInterview()};
+async function loadInterview(){
+ const id=$('#interviewSelect').value;if(!id)return;
+ const x=await api('/interviews/'+id);
+ $('#interviewStatus').value=x.status;$('#interviewCandidateConfirm').value=x.candidate_confirmation;
+ $('#interviewEditScheduled').value=x.scheduled_at;$('#interviewEditTimezone').value=x.timezone;
+ $('#interviewEditFormat').value=x.format;$('#interviewEditLink').value=x.meeting_link||'';
+ $('#interviewEditLocation').value=x.meeting_location||'';$('#interviewEditers').value=x.interviewer_names||'';
+ $('#interviewOutcome').value=x.outcome||'Pending';$('#interviewFeedback').value=x.feedback||'';
+ $('#interviewHistory').innerHTML=table(['Event','Details','Time'],(x.events||[]).map(e=>'<tr><td>'+esc(e.event_type)+'</td><td>'+esc(e.details)+'</td><td>'+esc(e.created_at)+'</td></tr>'));
+}
+$('#interviewSelect').onchange=()=>loadInterview().catch(e=>alert(e.message));
+$('#createInterview').onclick=async()=>{const submission_id=Number($('#interviewSubmission').value);if(!submission_id)return alert('Select a client submission with an interview request.');try{const r=await api('/interviews',{method:'POST',body:JSON.stringify({submission_id,round_number:Number($('#interviewRound').value||1),round_name:$('#interviewRoundName').value,scheduled_at:$('#interviewScheduled').value,timezone:$('#interviewTimezone').value,format:$('#interviewFormat').value,meeting_link:$('#interviewLink').value,meeting_location:$('#interviewLocation').value,interviewer_names:$('#interviewers').value})});$('#interviewMessage').textContent=r.message;await loadInterviewData();$('#interviewSelect').value=r.id;await loadInterview()}catch(e){$('#interviewMessage').textContent=e.message}};
+$('#saveInterviewDetails').onclick=async()=>{const id=$('#interviewSelect').value;if(!id)return;try{const r=await api('/interviews/'+id,{method:'PATCH',body:JSON.stringify({scheduled_at:$('#interviewEditScheduled').value,timezone:$('#interviewEditTimezone').value,format:$('#interviewEditFormat').value,meeting_link:$('#interviewEditLink').value,meeting_location:$('#interviewEditLocation').value,interviewer_names:$('#interviewEditers').value,candidate_confirmation:$('#interviewCandidateConfirm').value})});$('#interviewMessage').textContent=r.message;await loadInterviewData();await loadInterview()}catch(e){$('#interviewMessage').textContent=e.message}};
+$('#saveInterviewFeedback').onclick=async()=>{const id=$('#interviewSelect').value;if(!id)return;try{const r=await api('/interviews/'+id+'/feedback',{method:'POST',body:JSON.stringify({outcome:$('#interviewOutcome').value,feedback:$('#interviewFeedback').value})});$('#interviewMessage').textContent='Interview feedback saved: '+r.outcome;await loadInterviewData();await loadInterview()}catch(e){$('#interviewMessage').textContent=e.message}};
 async function loadSubmissionData(){
  try{
   const [clients,ss,subs]=await Promise.all([api('/submissions/clients'),api('/screening/sessions'),api('/submissions')]);
