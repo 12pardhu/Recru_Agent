@@ -195,6 +195,9 @@ def update_sourcing_task(task_id:int,payload:dict):
     if not isinstance(target,int) or target<1 or target>100:
         raise HTTPException(400,"Target must be between 1 and 100.")
     notes=str(payload.get("notes",task[0].get("notes","")))
+    if status=="Completed":
+        pending_searches=rows("SELECT id FROM sourcing_searches WHERE task_id=? AND status NOT IN ('Completed','Skipped')",(task_id,))
+        if pending_searches: raise HTTPException(409,"Complete or skip every location search before completing the sourcing task.")
     started=task[0].get("started_at","") or (now() if status=="In Progress" else "")
     completed=now() if status=="Completed" else ""
     with db() as c:
