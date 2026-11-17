@@ -117,6 +117,27 @@ Cloud-hosted recruiter-assist application for US IT staffing. The product is bei
 - Highlight overdue and upcoming pipeline actions only when a time-zone offset is available; local due times without an offset are not falsely classified.
 - Dashboard metrics are descriptive workflow counts, not recruiter performance scores or candidate suitability decisions.
 
+## Milestone 12: Security, Quality and Release
+
+- Require authenticated sessions for application APIs; sign-in is bootstrapped from deployment secrets rather than a hard-coded default account.
+- Store passwords as salted PBKDF2-HMAC-SHA256 hashes, use random opaque sessions, HttpOnly/SameSite cookies, an 8-hour session expiry, and sign-in rate limiting.
+- Support Admin, Recruiter, and Reviewer roles. Reviewers can update only approval and qualification records; administrators manage users and view the audit log.
+- Record authenticated write actions in an audit log without copying request bodies or candidate content.
+- Add security response headers and disable public interactive API documentation.
+- Render Blueprint requests ADMIN_USERNAME, ADMIN_PASSWORD, and SESSION_SECRET as private environment values. Never commit credentials or session secrets.
+- **Release limitation:** this codebase still uses SQLite and local file storage. It does not yet provide multi-tenant row isolation, managed persistent database/storage, encryption at rest, automated backups, or complete privacy/retention/deletion workflows. These infrastructure and governance controls must be completed before real candidate data or external recruiter rollout.
+- Formal runtime verification, security review, recovery testing, and release sign-off remain deferred until all milestone development is complete.
+
+### Authentication setup
+
+Configure these environment variables before using the application:
+- `ADMIN_USERNAME`: initial administrator username.
+- `ADMIN_PASSWORD`: initial administrator password (at least 12 characters).
+- `SESSION_SECRET`: a long random secret used to protect session tokens.
+- `AUTH_COOKIE_SECURE=true` on HTTPS hosting; use false only for local HTTP development.
+
+The initial administrator is created once when the application starts with these values. Later password changes should be made from the in-app Account Security section. If credentials are missing, the application intentionally blocks API access and shows an administrator-configuration message.
+
 ## Existing recruiter-assist features
 
 - Prepare LinkedIn People Search URLs for the recruiter to open in their authorized LinkedIn session.
@@ -165,3 +186,5 @@ Milestone 1 development implementation is complete; its runtime verification and
 Milestone 10 development implementation is complete; runtime verification and testing remain deferred.
 
 Milestone 11 development implementation is complete; runtime verification and testing remain deferred.
+
+Milestone 12 security implementation is in progress; infrastructure hardening and formal release sign-off are still required.
