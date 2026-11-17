@@ -192,3 +192,8 @@ def export_candidates():
 app.mount("/static",StaticFiles(directory=ROOT/"static"),name="static")
 @app.get("/",response_class=HTMLResponse)
 def home(): return (ROOT/"static"/"index.html").read_text(encoding="utf-8")
+
+
+# Milestone 1: reviewed JD drafts and recruiter confirmation.
+from jd_intelligence import router as jd_router
+app.include_router(jd_router)
