@@ -97,10 +97,7 @@ def create_platform_plan(job_id: int, payload: PlanRequest):
           (job_id,platform,location,search_type,query_text,platform_url,status,created_at,updated_at)
           VALUES(?,?,?,?,?,?,?,?,?)
         """, variants)
-        ids = [row["id"] for row in c.execute(
-            "SELECT id FROM platform_sourcing_searches WHERE job_id=? ORDER BY id DESC LIMIT ?",
-            (job_id, len(variants))
-        ).fetchall()]
+        c.commit()
     return {
         "job_id": job_id,
         "job_title": job["title"],
