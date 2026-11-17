@@ -42,6 +42,7 @@ $('#sourceHistory').innerHTML=table(['Job','Progress','Status','Notes','Created'
 if(t.length) loadSourcingTask().catch(e=>console.warn(e));
 loadCommunicationMessages().catch(e=>console.warn(e));
 loadScreeningSessions().catch(e=>console.warn(e));
+loadSubmissionData().catch(e=>console.warn(e));
 }
 async function loadQualifications(){
  const id=$('#qualificationJob').value;if(!id)return;
@@ -101,6 +102,33 @@ $('#runMatch').onclick=async()=>{const id=$('#matchJob').value;if(!id)return ale
 window.makeApproval=async candidate_id=>{try{await api('/approvals',{method:'POST',body:JSON.stringify({candidate_id,job_id:Number($('#matchJob').value)})});await refresh();alert('Added to approval queue.')}catch(e){alert(e.message)}};
 window.decision=async(id,status)=>{try{await api('/approvals/'+id,{method:'PATCH',body:JSON.stringify({status})});await refresh()}catch(e){alert(e.message)}};
 
+async function loadSubmissionData(){
+ try{
+  const [clients,ss,subs]=await Promise.all([api('/submissions/clients'),api('/screening/sessions'),api('/submissions')]);
+  $('#clientList').innerHTML=table(['Company','Contact','Email','Status'],clients.map(x=>'<tr><td>'+esc(x.company_name)+'</td><td>'+esc(x.contact_name)+'</td><td>'+esc(x.email)+'</td><td>'+esc(x.status)+'</td></tr>'));
+  $('#submissionClient').innerHTML=clients.filter(x=>x.status==='Active').map(x=>'<option value="'+x.id+'">'+esc(x.company_name)+'</option>').join('');
+  $('#submissionCandidate').innerHTML=people.map(x=>'<option value="'+x.id+'">'+esc(x.name)+'</option>').join('');
+  $('#submissionJob').innerHTML=jobs.map(x=>'<option value="'+x.id+'">'+esc(x.title)+' — '+esc(x.location)+'</option>').join('');
+  $('#submissionScreening').innerHTML=ss.filter(x=>x.status==='Completed'&&x.submission_consent==='Yes').map(x=>'<option value="'+x.id+'">#'+x.id+' · '+esc(x.candidate_name)+' · '+esc(x.job_title)+'</option>').join('');
+  $('#submissionList').innerHTML=table(['Candidate','Job','Client','Status','Rate','Client feedback','Actions'],subs.map(s=>{
+   let actions='';
+   if(s.status==='Draft') actions='<button type="button" onclick="approveSubmission('+s.id+')">Approve</button>';
+   if(s.status==='Approved') actions='<button type="button" onclick="markSubmissionSent('+s.id+')">Record manual submission</button>';
+   let feedback='';
+   if(['Manually Submitted','Client Feedback'].includes(s.status)) feedback='<select id="fbstatus-'+s.id+'"><option>Interview Requested</option><option>Rejected</option><option>On Hold</option><option>More Information Requested</option><option>Offer</option><option>No Update</option></select><input id="fbnote-'+s.id+'" placeholder="Client feedback"><button type="button" onclick="saveSubmissionFeedback('+s.id+')">Save feedback</button>';
+   if(!['Withdrawn','Rejected'].includes(s.status)) actions+=' <button type="button" onclick="withdrawSubmission('+s.id+')">Withdraw</button>';
+   actions+=' <button type="button" onclick="viewSubmissionHistory('+s.id+')">History</button>';
+   return '<tr><td>'+esc(s.candidate_name)+'</td><td>'+esc(s.job_title)+'</td><td>'+esc(s.company_name)+'</td><td>'+esc(s.status)+'</td><td>'+esc(s.submitted_rate||'')+'</td><td>'+esc(s.feedback_status||'')+' '+esc(s.client_feedback||'')+' '+feedback+'</td><td>'+actions+'</td></tr>';
+  }));
+ }catch(e){$('#submissionMessage').textContent=e.message}
+}
+window.approveSubmission=async id=>{try{const r=await api('/submissions/'+id+'/approve',{method:'POST',body:JSON.stringify({approver:'Recruiter'})});$('#submissionMessage').textContent=r.message;await loadSubmissionData()}catch(e){$('#submissionMessage').textContent=e.message}};
+window.markSubmissionSent=async id=>{try{const r=await api('/submissions/'+id+'/mark-manually-submitted',{method:'POST',body:JSON.stringify({confirmed_manual_submission:true})});$('#submissionMessage').textContent=r.message;await loadSubmissionData()}catch(e){$('#submissionMessage').textContent=e.message}};
+window.saveSubmissionFeedback=async id=>{try{const r=await api('/submissions/'+id+'/feedback',{method:'POST',body:JSON.stringify({feedback_status:$('#fbstatus-'+id).value,client_feedback:$('#fbnote-'+id).value})});$('#submissionMessage').textContent='Client feedback saved: '+r.feedback_status;await loadSubmissionData()}catch(e){$('#submissionMessage').textContent=e.message}};
+window.withdrawSubmission=async id=>{try{await api('/submissions/'+id+'/withdraw',{method:'POST'});await loadSubmissionData()}catch(e){alert(e.message)}};
+window.viewSubmissionHistory=async id=>{try{const h=await api('/submissions/'+id+'/history');$('#submissionHistory').innerHTML='<h3>Submission history — #'+id+'</h3>'+table(['Event','Details','Time'],h.map(x=>'<tr><td>'+esc(x.event_type)+'</td><td>'+esc(x.details)+'</td><td>'+esc(x.created_at)+'</td></tr>'))}catch(e){$('#submissionHistory').textContent=e.message}};
+$('#saveClient').onclick=async()=>{const company_name=$('#clientCompany').value.trim();if(!company_name)return alert('Enter a company name.');try{await api('/submissions/clients',{method:'POST',body:JSON.stringify({company_name,contact_name:$('#clientContact').value,email:$('#clientEmail').value,phone:$('#clientPhone').value,notes:$('#clientNotes').value})});$('#submissionMessage').textContent='Client saved.';await loadSubmissionData()}catch(e){$('#submissionMessage').textContent=e.message}};
+$('#createSubmission').onclick=async()=>{const client_id=Number($('#submissionClient').value),candidate_id=Number($('#submissionCandidate').value),job_id=Number($('#submissionJob').value),screening_session_id=Number($('#submissionScreening').value);if(!client_id||!candidate_id||!job_id||!screening_session_id)return alert('Select a client, candidate, confirmed job and completed consented screening session.');try{const r=await api('/submissions/drafts',{method:'POST',body:JSON.stringify({client_id,candidate_id,job_id,screening_session_id,submitted_rate:$('#submissionRate').value,recruiter_notes:$('#submissionNotes').value})});$('#submissionMessage').textContent=r.message;await loadSubmissionData()}catch(e){$('#submissionMessage').textContent=e.message}};
 let currentScreening=null;
 async function loadScreeningSessions(){
  try{
