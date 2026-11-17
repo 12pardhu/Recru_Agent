@@ -146,6 +146,16 @@ def download_candidate_resume(candidate_id:int):
     if DOCS.resolve() not in path.parents or not path.is_file(): raise HTTPException(404,"The original resume file is not available.")
     return FileResponse(path,filename=row["original_filename"] or path.name)
 
+@router.get("/drafts/{draft_id}/quality")
+def resume_quality(draft_id:str):
+    d=read_draft(draft_id); f=d["analysis"]["fields"]
+    blockers=[]; warnings=[]
+    if not str(f.get("name","")).strip(): blockers.append({"field":"name","message":"Candidate name was not identified. Enter it manually before saving."})
+    for key,label in [("email","Email"),("location","Location"),("experience","Experience"),("skills","Skills"),("work_history","Work history")]:
+        value=f.get(key)
+        if value in ("",[],None,0): warnings.append({"field":key,"message":label+" was not identified. Verify the resume or leave it unknown."})
+    return {"ready_to_attach":not blockers,"blockers":blockers,"warnings":warnings}
+
 @router.get("/drafts/{draft_id}/document")
 def download_resume_document(draft_id:str):
     d=read_draft(draft_id)
