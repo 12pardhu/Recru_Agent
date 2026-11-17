@@ -1,6 +1,6 @@
 # Recru Agent
 
-Cloud-hosted recruiter-assist application for US IT staffing. The product is being developed in 12 milestones. The current development branch contains the completed development implementation for **Milestone 1 — Job Requirement Intelligence** **Milestone 2 — Candidate Sourcing Intelligence** **Milestone 3 — Resume Intelligence** and the in-progress **Milestone 4 — Candidate Qualification**. Runtime verification and formal test/sign-off are intentionally deferred until all 12 development milestones are built.
+Cloud-hosted recruiter-assist application for US IT staffing. The product is being developed in 12 milestones. The current development branch contains the completed development implementation for **Milestone 1 — Job Requirement Intelligence** **Milestone 2 — Candidate Sourcing Intelligence** **Milestone 3 — Resume Intelligence** **Milestone 4 — Candidate Qualification** and the in-progress **Milestone 5 — Candidate Communication**. Runtime verification and formal test/sign-off are intentionally deferred until all 12 development milestones are built.
 
 ## Milestone 1: Job Requirement Intelligence
 
@@ -49,6 +49,16 @@ Cloud-hosted recruiter-assist application for US IT staffing. The product is bei
 
 **Important:** qualification is an evidence-based screening aid, not a hiring decision. Recruiters remain responsible for verifying information and choosing the next step.
 
+## Milestone 5: Candidate Communication (in development)
+
+- Create initial outreach, LinkedIn introduction, follow-up, screening availability, and work authorization/engagement-check drafts.
+- Personalize drafts from saved candidate and confirmed job fields.
+- Respect candidate contact preference and Do Not Contact flags.
+- Require a human approval step before a draft can be marked approved.
+- Record manual sending only after the recruiter explicitly confirms they sent the approved message themselves.
+- Maintain message status and activity history.
+- No email or LinkedIn messages are sent automatically by this milestone.
+
 ## Existing recruiter-assist features
 
 - Prepare LinkedIn People Search URLs for the recruiter to open in their authorized LinkedIn session.
@@ -92,4 +102,4 @@ No login, role-based access control, tenant isolation, managed persistent databa
 11. Recruiter Productivity Dashboard
 12. Security, Quality and Release
 
-Milestone 1 development implementation is complete; its runtime verification and test/sign-off remain deferred. Milestone 2 development implementation is complete; runtime verification and testing remain deferred. Milestone 3 development implementation is complete; runtime verification and testing remain deferred. Milestone 4 is under development.
+Milestone 1 development implementation is complete; its runtime verification and test/sign-off remain deferred. Milestone 2 development implementation is complete; runtime verification and testing remain deferred. Milestone 3 development implementation is complete; runtime verification and testing remain deferred. Milestone 4 development implementation is complete; runtime verification and testing remain deferred. Milestone 5 is under development.
