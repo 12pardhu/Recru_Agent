@@ -86,7 +86,7 @@ def create_message(payload:dict):
         raise HTTPException(409,"This candidate is marked Do not contact. No message draft can be created.")
     if channel not in ("Email","LinkedIn"):
         raise HTTPException(400,"Choose Email or LinkedIn as the channel.")
-    if candidate.get("contact_preference") in ("Email","LinkedIn") and candidate["contact_preference"]!=channel:
+    if candidate.get("contact_preference") in ("Email","LinkedIn","Phone") and candidate["contact_preference"]!=channel:
         raise HTTPException(409,"The selected channel differs from the candidate's recorded contact preference.")
     if channel=="Email" and not candidate.get("email"):
         raise HTTPException(400,"This candidate has no email address recorded.")
@@ -102,6 +102,7 @@ def create_message(payload:dict):
     if job_id:
         jobs=rows("SELECT * FROM jobs WHERE id=?",(int(job_id),))
         if not jobs: raise HTTPException(404,"Job requirement not found.")
+        if not rows("SELECT id FROM job_versions WHERE job_id=? LIMIT 1",(int(job_id),)): raise HTTPException(409,"Confirm the job requirement before creating candidate communication.")
         job=jobs[0]
     subject,body=render(template,{"candidate":candidate,"job":job})
     with connect() as c:
@@ -144,6 +145,7 @@ def submit_for_approval(message_id:int):
     if not messages: raise HTTPException(404,"Message draft not found.")
     m=messages[0]
     if m["do_not_contact"] or m["contact_preference"]=="Do not contact": raise HTTPException(409,"Candidate is marked Do not contact.")
+    if m["contact_preference"] in ("Email","LinkedIn","Phone") and m["contact_preference"]!=m["channel"]: raise HTTPException(409,"Candidate contact preference no longer matches this message channel.")
     if m["status"] not in ("Draft",): raise HTTPException(409,"Only a draft can be submitted for approval.")
     if not m["body"].strip(): raise HTTPException(400,"Message body cannot be empty.")
     with connect() as c:
@@ -157,6 +159,7 @@ def approve_message(message_id:int,payload:dict):
     if not messages: raise HTTPException(404,"Message draft not found.")
     m=messages[0]
     if m["do_not_contact"] or m["contact_preference"]=="Do not contact": raise HTTPException(409,"Candidate is marked Do not contact.")
+    if m["contact_preference"] in ("Email","LinkedIn","Phone") and m["contact_preference"]!=m["channel"]: raise HTTPException(409,"Candidate contact preference no longer matches this message channel.")
     if m["status"]!="Pending Approval": raise HTTPException(409,"Only pending messages can be approved.")
     approver=str(payload.get("approver","Recruiter")).strip() or "Recruiter"
     with connect() as c:
@@ -169,8 +172,10 @@ def approve_message(message_id:int,payload:dict):
 def mark_manually_sent(message_id:int,payload:dict):
     if not payload.get("confirmed_manual_send"):
         raise HTTPException(400,"Confirm that you sent the approved message manually before recording it.")
-    messages=rows("SELECT status FROM communication_messages WHERE id=?",(message_id,))
+    messages=rows("SELECT m.status,m.channel,c.do_not_contact,c.contact_preference FROM communication_messages m JOIN candidates c ON c.id=m.candidate_id WHERE m.id=?",(message_id,))
     if not messages: raise HTTPException(404,"Message draft not found.")
+    if messages[0]["do_not_contact"] or messages[0]["contact_preference"]=="Do not contact": raise HTTPException(409,"Candidate is marked Do not contact.")
+    if messages[0]["contact_preference"] in ("Email","LinkedIn","Phone") and messages[0]["contact_preference"]!=messages[0]["channel"]: raise HTTPException(409,"Candidate contact preference no longer matches this message channel.")
     if messages[0]["status"]!="Approved": raise HTTPException(409,"Only an approved message can be marked manually sent.")
     with connect() as c:
         c.execute("UPDATE communication_messages SET status='Manually Sent',manually_sent_at=?,updated_at=? WHERE id=?",(stamp(),stamp(),message_id))
