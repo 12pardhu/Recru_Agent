@@ -1,6 +1,6 @@
 # Recru Agent
 
-Cloud-hosted recruiter-assist application for US IT staffing. The product is being developed in 12 milestones. The current development branch contains the completed development implementation for **Milestone 1 — Job Requirement Intelligence** **Milestone 2 — Candidate Sourcing Intelligence** **Milestone 3 — Resume Intelligence** **Milestone 4 — Candidate Qualification** and the in-progress **Milestone 5 — Candidate Communication**. Runtime verification and formal test/sign-off are intentionally deferred until all 12 development milestones are built.
+Cloud-hosted recruiter-assist application for US IT staffing. The product is being developed in 12 milestones. The current development branch contains the completed development implementation for **Milestone 1 — Job Requirement Intelligence** **Milestone 2 — Candidate Sourcing Intelligence** **Milestone 3 — Resume Intelligence** **Milestone 4 — Candidate Qualification** **Milestone 5 — Candidate Communication** and the in-progress **Milestone 6 — OPT Recruiter Screening**. Runtime verification and formal test/sign-off are intentionally deferred until all 12 development milestones are built.
 
 ## Milestone 1: Job Requirement Intelligence
 
@@ -59,6 +59,16 @@ Cloud-hosted recruiter-assist application for US IT staffing. The product is bei
 - Maintain message status and activity history.
 - No email or LinkedIn messages are sent automatically by this milestone.
 
+## Milestone 6: OPT Recruiter Screening (in development)
+
+- Create screening sessions for a candidate and confirmed job requirement.
+- Capture candidate-stated work authorization, OPT/STEM OPT dates, sponsorship needs, C2C/W2 preference, experience, location, work arrangement, rate, availability, and interview windows.
+- Record a separate confirmation status and evidence note for each answer.
+- Capture explicit candidate consent to submit their profile to a specific client/role.
+- Apply only candidate-confirmed answers to the candidate profile; unconfirmed answers remain screening notes.
+- Track session status, recruiter notes, and activity history.
+- Screening is recruiter recordkeeping, not immigration/legal advice. Do not store passport numbers, SSNs, or unnecessary sensitive identifiers.
+
 ## Existing recruiter-assist features
 
 - Prepare LinkedIn People Search URLs for the recruiter to open in their authorized LinkedIn session.
@@ -102,4 +112,4 @@ No login, role-based access control, tenant isolation, managed persistent databa
 11. Recruiter Productivity Dashboard
 12. Security, Quality and Release
 
-Milestone 1 development implementation is complete; its runtime verification and test/sign-off remain deferred. Milestone 2 development implementation is complete; runtime verification and testing remain deferred. Milestone 3 development implementation is complete; runtime verification and testing remain deferred. Milestone 4 development implementation is complete; runtime verification and testing remain deferred. Milestone 5 is under development.
+Milestone 1 development implementation is complete; its runtime verification and test/sign-off remain deferred. Milestone 2 development implementation is complete; runtime verification and testing remain deferred. Milestone 3 development implementation is complete; runtime verification and testing remain deferred. Milestone 4 development implementation is complete; runtime verification and testing remain deferred. Milestone 5 development implementation is complete; runtime verification and testing remain deferred. Milestone 6 is under development.
