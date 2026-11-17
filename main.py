@@ -125,26 +125,71 @@ def add_candidate(p:CandidateIn):
             c.execute("UPDATE sourcing_tasks SET status=CASE WHEN status='Prepared' THEN 'In Progress' ELSE status END WHERE id=?",(p.sourcing_task_id,))
             c.execute("INSERT INTO sourcing_events(task_id,event_type,details,created_at) VALUES(?,?,?,?)",(p.sourcing_task_id,"Candidate captured","Candidate record #"+str(cur.lastrowid),now()))
         return {"id":cur.lastrowid,"message":"Candidate saved with sourcing provenance" if p.sourcing_task_id else "Candidate saved"}
-def build_plan(job_id):
+def build_plan(job_id, target_count=50):
     js=rows("SELECT * FROM jobs WHERE id=?",(job_id,))
     if not js: raise HTTPException(404,"Job not found")
     j=js[0]
-    # Only recruiter-confirmed JD records (with a version snapshot) may enter sourcing.
     if not rows("SELECT id FROM job_versions WHERE job_id=? LIMIT 1",(job_id,)):
         raise HTTPException(409,"This requirement has not completed recruiter review and confirmation. Use the JD review workflow first.")
-    # Use role-specific terms and all JD locations; omit broad inferred domain labels.
-    # Authorization terms are search hints only, never proof of a candidate's status.
+    if not isinstance(target_count,int) or target_count<1 or target_count>100:
+        raise HTTPException(400,"Daily sourcing target must be between 1 and 100.")
     auth_terms=j.get("work_auth","")
-    query=" ".join(x for x in [j["title"],j["skills"],j["location"],auth_terms,"Open to Work"] if x)
-    url="https://www.linkedin.com/search/results/people/?keywords="+quote_plus(query)
+    if auth_terms=="Unknown": auth_terms=""
+    locations=[x.strip() for x in (j.get("location") or "").split(";") if x.strip()] or [""]
+    search_rows=[]
+    for location in locations:
+        query=" ".join(x for x in [j["title"],j["skills"],location,auth_terms,"Open to Work"] if x)
+        url="https://www.linkedin.com/search/results/people/?keywords="+quote_plus(query)
+        search_rows.append({"location":location or "All locations","query":query,"linkedin_search_url":url})
+    combined_query=" | ".join(x["query"] for x in search_rows)
     with db() as c:
-        cur=c.execute("INSERT INTO sourcing_tasks(job_id,mode,query_text,linkedin_url,status,created_at) VALUES(?,?,?,?,?,?)",(job_id,"Both",query,url,"Prepared",now()))
+        cur=c.execute("INSERT INTO sourcing_tasks(job_id,mode,query_text,linkedin_url,status,created_at,target_count) VALUES(?,?,?,?,?,?,?)",
+          (job_id,"Location-specific search plan",combined_query,search_rows[0]["linkedin_search_url"],"Prepared",now(),target_count))
         task_id=cur.lastrowid
-    return {"task_id":task_id,"mode":"Automatic preparation + recruiter-triggered search","query":query,"linkedin_search_url":url,"status":"Prepared","note":"This creates a search plan and opens LinkedIn for a recruiter to review. It does not scrape LinkedIn or automatically extract profile data."}
+        for item in search_rows:
+            c.execute("INSERT INTO sourcing_searches(task_id,location,query_text,linkedin_url,status,created_at) VALUES(?,?,?,?,?,?)",
+              (task_id,item["location"],item["query"],item["linkedin_search_url"],"Prepared",now()))
+        c.execute("INSERT INTO sourcing_events(task_id,event_type,details,created_at) VALUES(?,?,?,?)",
+          (task_id,"Plan prepared",str(len(search_rows))+" location search(es); target "+str(target_count),now()))
+    return {"task_id":task_id,"mode":"Recruiter-controlled, location-specific search plan","query":combined_query,
+      "linkedin_search_url":search_rows[0]["linkedin_search_url"],"searches":search_rows,"target_count":target_count,
+      "status":"Prepared","note":"Open each search in your authorized LinkedIn account. Recru Agent does not scrape LinkedIn or automatically collect profile data."}
 @app.post("/api/jobs/{job_id}/sourcing-plan")
-def sourcing_plan(job_id:int): return build_plan(job_id)
+def sourcing_plan(job_id:int, payload:dict=None):
+    target=int((payload or {}).get("target_count",50))
+    return build_plan(job_id,target)
 @app.get("/api/sourcing")
-def sourcing_tasks(): return rows("SELECT s.*,j.title job_title FROM sourcing_tasks s JOIN jobs j ON j.id=s.job_id ORDER BY s.id DESC")
+def sourcing_tasks():
+    return rows("""SELECT s.*,j.title job_title,
+      (SELECT COUNT(*) FROM candidates p WHERE p.sourcing_task_id=s.id) added_count
+      FROM sourcing_tasks s JOIN jobs j ON j.id=s.job_id ORDER BY s.id DESC""")
+@app.get("/api/sourcing/{task_id}/searches")
+def sourcing_searches(task_id:int):
+    if not rows("SELECT id FROM sourcing_tasks WHERE id=?",(task_id,)): raise HTTPException(404,"Sourcing task not found.")
+    return rows("SELECT * FROM sourcing_searches WHERE task_id=? ORDER BY id",(task_id,))
+@app.get("/api/sourcing/{task_id}/activity")
+def sourcing_activity(task_id:int):
+    if not rows("SELECT id FROM sourcing_tasks WHERE id=?",(task_id,)): raise HTTPException(404,"Sourcing task not found.")
+    return rows("SELECT * FROM sourcing_events WHERE task_id=? ORDER BY id DESC",(task_id,))
+@app.patch("/api/sourcing/{task_id}")
+def update_sourcing_task(task_id:int,payload:dict):
+    task=rows("SELECT * FROM sourcing_tasks WHERE id=?",(task_id,))
+    if not task: raise HTTPException(404,"Sourcing task not found.")
+    status=payload.get("status",task[0]["status"])
+    if status not in ("Prepared","In Progress","Paused","Completed"):
+        raise HTTPException(400,"Status must be Prepared, In Progress, Paused, or Completed.")
+    target=payload.get("target_count",task[0].get("target_count",50))
+    if not isinstance(target,int) or target<1 or target>100:
+        raise HTTPException(400,"Target must be between 1 and 100.")
+    notes=str(payload.get("notes",task[0].get("notes","")))
+    started=task[0].get("started_at","") or (now() if status=="In Progress" else "")
+    completed=now() if status=="Completed" else ""
+    with db() as c:
+        c.execute("UPDATE sourcing_tasks SET status=?,target_count=?,notes=?,started_at=?,completed_at=? WHERE id=?",
+          (status,target,notes,started,completed,task_id))
+        c.execute("INSERT INTO sourcing_events(task_id,event_type,details,created_at) VALUES(?,?,?,?)",
+          (task_id,"Task updated","Status: "+status+"; target: "+str(target),now()))
+    return {"task_id":task_id,"status":status,"target_count":target,"notes":notes}
 @app.post("/api/jobs/upload")
 async def upload_jd(file:UploadFile=File(...)):
     name=(file.filename or "").lower(); raw=await file.read()
