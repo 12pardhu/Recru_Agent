@@ -86,6 +86,8 @@ const taskOpts=t.map(x=>'<option value="'+x.id+'">#'+x.id+' · '+esc(x.job_title
 const currentTask=$('#sourceTaskControl').value;$('#sourceTaskControl').innerHTML=taskOpts;if(t.some(x=>String(x.id)===currentTask))$('#sourceTaskControl').value=currentTask;else if(t.length)$('#sourceTaskControl').value=t[0].id;
 $('#candidateSourcingTask').innerHTML='<option value="">Manual / not linked</option>'+taskOpts;
 $('#communicationCandidate').innerHTML=p.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' — '+esc(x.location)+'</option>').join('');
+$('#contactCandidate').innerHTML=p.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' — '+esc(x.location)+'</option>').join('');
+$('#contactJob').innerHTML='<option value="">General / no job selected</option>'+opts;
 $('#communicationJob').innerHTML='<option value="">General / no job selected</option>'+opts;
 $('#screenCandidate').innerHTML=p.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' — '+esc(x.location)+'</option>').join('');
 $('#screenJob').innerHTML=opts;
@@ -93,6 +95,7 @@ $('#approvalList').innerHTML=table(['Candidate','Job','Status','Notes','Action']
 $('#sourceHistory').innerHTML=table(['Job','Progress','Status','Notes','Created'],t.map(x=>'<tr><td>'+esc(x.job_title)+'</td><td>'+x.added_count+'/'+x.target_count+'</td><td>'+esc(x.status)+'</td><td>'+esc(x.notes||'')+'</td><td>'+esc(x.created_at)+'</td></tr>'));
 if(t.length) loadSourcingTask().catch(e=>console.warn(e));
 loadCommunicationMessages().catch(e=>console.warn(e));
+loadContactInteractions().catch(e=>console.warn(e));
 loadScreeningSessions().catch(e=>console.warn(e));
 loadSubmissionData().catch(e=>console.warn(e));
 loadInterviewData().catch(e=>console.warn(e));
@@ -462,6 +465,7 @@ $('#prepareAllPlatforms').onclick=async()=>{
 $('#sourceJob').addEventListener('change',()=>refreshPlatformSearches().catch(e=>$('#platformSourcingMessage').textContent=e.message));
 
 
+async function loadContactInteractions(){return refreshContactInteractions()}
 async function refreshContactInteractions(){
  const rows=await api('/communications/interactions');
  $('#contactActivityList').innerHTML=rows.length?table(['Candidate','Job','Channel','Direction','Outcome','Follow-up','Notes','Recorded'],rows.map(x=>'<tr><td>'+esc(x.candidate_name)+'</td><td>'+esc(x.job_title||'—')+'</td><td>'+esc(x.channel)+'</td><td>'+esc(x.direction)+'</td><td>'+esc(x.outcome)+'</td><td>'+esc(x.follow_up_at||'—')+'</td><td>'+esc(x.notes||'')+'</td><td>'+esc(x.created_at)+'</td></tr>')):'<p class="muted">No contact activities recorded yet.</p>';
