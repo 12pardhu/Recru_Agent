@@ -23,7 +23,7 @@ def init():
         CREATE TABLE IF NOT EXISTS candidates(id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT DEFAULT '', location TEXT DEFAULT '', experience REAL DEFAULT 0, skills TEXT DEFAULT '', work_auth TEXT DEFAULT 'Unknown', c2c_status TEXT DEFAULT 'Unknown', linkedin_url TEXT DEFAULT '', resume_text TEXT DEFAULT '', created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS approvals(id INTEGER PRIMARY KEY, candidate_id INTEGER NOT NULL, job_id INTEGER NOT NULL, status TEXT DEFAULT 'Pending', notes TEXT DEFAULT '', created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS sourcing_tasks(id INTEGER PRIMARY KEY, job_id INTEGER NOT NULL, mode TEXT NOT NULL, query_text TEXT NOT NULL, linkedin_url TEXT NOT NULL, status TEXT DEFAULT 'Prepared', created_at TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS sourcing_searches(id INTEGER PRIMARY KEY, task_id INTEGER NOT NULL, location TEXT DEFAULT '', query_text TEXT NOT NULL, linkedin_url TEXT NOT NULL, status TEXT DEFAULT 'Prepared', created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS sourcing_searches(id INTEGER PRIMARY KEY, task_id INTEGER NOT NULL, location TEXT DEFAULT '', search_type TEXT DEFAULT 'Role + skills', query_text TEXT NOT NULL, linkedin_url TEXT NOT NULL, status TEXT DEFAULT 'Prepared', created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS sourcing_events(id INTEGER PRIMARY KEY, task_id INTEGER NOT NULL, event_type TEXT NOT NULL, details TEXT DEFAULT '', created_at TEXT NOT NULL);
         """)
         migrations={
@@ -31,6 +31,7 @@ def init():
           "candidates":{"open_to_work":"TEXT DEFAULT 'Unknown'","availability_signal":"TEXT DEFAULT 'Unknown'","profile_updated":"TEXT DEFAULT ''","source_type":"TEXT DEFAULT 'Manual'","source_url":"TEXT DEFAULT ''","source_evidence":"TEXT DEFAULT ''","c2c_confirmed":"TEXT DEFAULT 'Unknown'","work_auth_confirmed":"TEXT DEFAULT 'Unknown'","sourcing_task_id":"INTEGER"}
         }
         migrations["sourcing_tasks"]={"target_count":"INTEGER DEFAULT 50","notes":"TEXT DEFAULT ''","started_at":"TEXT DEFAULT ''","completed_at":"TEXT DEFAULT ''"}
+        migrations["sourcing_searches"]={"search_type":"TEXT DEFAULT 'Role + skills'"}
         for table,cols in migrations.items():
             existing={r["name"] for r in c.execute(f"PRAGMA table_info({table})")}
             for name,definition in cols.items():
@@ -141,22 +142,32 @@ def build_plan(job_id, target_count=50):
     auth_terms=j.get("work_auth","")
     if auth_terms=="Unknown": auth_terms=""
     locations=[x.strip() for x in (j.get("location") or "").split(";") if x.strip()] or [""]
+    skill_terms=tokens(j.get("skills",""))
     search_rows=[]
     for location in locations:
-        query=" ".join(x for x in [j["title"],j["skills"],location,auth_terms,"Open to Work"] if x)
-        url="https://www.linkedin.com/search/results/people/?keywords="+quote_plus(query)
-        search_rows.append({"location":location or "All locations","query":query,"linkedin_search_url":url})
+        variants=[
+          ("Role", " ".join(x for x in [j["title"],location,"Open to Work"] if x)),
+          ("Skills", " ".join(x for x in [j["title"],", ".join(skill_terms[:5]),location] if x))
+        ]
+        if auth_terms:
+            variants.append(("Authorization hint"," ".join(x for x in [j["title"],location,auth_terms] if x)))
+        seen=set()
+        for search_type,query in variants:
+            if not query or query.lower() in seen: continue
+            seen.add(query.lower())
+            url="https://www.linkedin.com/search/results/people/?keywords="+quote_plus(query)
+            search_rows.append({"location":location or "All locations","search_type":search_type,"query":query,"linkedin_search_url":url})
     combined_query=" | ".join(x["query"] for x in search_rows)
     with db() as c:
         cur=c.execute("INSERT INTO sourcing_tasks(job_id,mode,query_text,linkedin_url,status,created_at,target_count) VALUES(?,?,?,?,?,?,?)",
-          (job_id,"Location-specific search plan",combined_query,search_rows[0]["linkedin_search_url"],"Prepared",now(),target_count))
+          (job_id,"Location and keyword variants",combined_query,search_rows[0]["linkedin_search_url"],"Prepared",now(),target_count))
         task_id=cur.lastrowid
         for item in search_rows:
-            c.execute("INSERT INTO sourcing_searches(task_id,location,query_text,linkedin_url,status,created_at) VALUES(?,?,?,?,?,?)",
-              (task_id,item["location"],item["query"],item["linkedin_search_url"],"Prepared",now()))
+            c.execute("INSERT INTO sourcing_searches(task_id,location,search_type,query_text,linkedin_url,status,created_at) VALUES(?,?,?,?,?,?,?)",
+              (task_id,item["location"],item["search_type"],item["query"],item["linkedin_search_url"],"Prepared",now()))
         c.execute("INSERT INTO sourcing_events(task_id,event_type,details,created_at) VALUES(?,?,?,?)",
-          (task_id,"Plan prepared",str(len(search_rows))+" location search(es); target "+str(target_count),now()))
-    return {"task_id":task_id,"mode":"Recruiter-controlled, location-specific search plan","query":combined_query,
+          (task_id,"Plan prepared",str(len(search_rows))+" search variant(s); target "+str(target_count),now()))
+    return {"task_id":task_id,"mode":"Recruiter-controlled location and keyword search plan","query":combined_query,
       "linkedin_search_url":search_rows[0]["linkedin_search_url"],"searches":search_rows,"target_count":target_count,
       "status":"Prepared","note":"Open each search in your authorized LinkedIn account. Recru Agent does not scrape LinkedIn or automatically collect profile data."}
 @app.post("/api/jobs/{job_id}/sourcing-plan")
