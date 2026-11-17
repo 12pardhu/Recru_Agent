@@ -36,11 +36,11 @@ def init():
         );
         """)
         defaults=[
-          ("Initial opportunity outreach","Email","Opportunity to discuss {job_title}","Hi {candidate_name},\\n\\nI am reaching out about a {job_title} opportunity{location_phrase}. Your background in {skills} may be relevant to the role. Would you be open to a brief conversation to learn more?\\n\\nIf interested, please let me know a convenient time.\\n\\nRegards,\\nRecruiter"),
+          ("Initial opportunity outreach","Email","Opportunity to discuss {job_title}","Hi {candidate_name},\n\nI am reaching out about a {job_title} opportunity{location_phrase}. Your background in {skills} may be relevant to the role. Would you be open to a brief conversation to learn more?\n\nIf interested, please let me know a convenient time.\n\nRegards,\nRecruiter"),
           ("LinkedIn introduction","LinkedIn","","Hi {candidate_name}, I am reaching out about a {job_title} opportunity{location_phrase}. Your experience with {skills} may be relevant. Would you be open to connecting and hearing more?"),
-          ("Follow-up","Email","Following up — {job_title}","Hi {candidate_name},\\n\\nI wanted to follow up on my earlier note about the {job_title} opportunity. If you are interested, I would be happy to share the details. If it is not a fit, no worries.\\n\\nRegards,\\nRecruiter"),
-          ("Screening availability request","Email","Availability for a {job_title} discussion","Hi {candidate_name},\\n\\nWould you be available for a short discussion about the {job_title} opportunity? Please share a few time windows that work for you.\\n\\nRegards,\\nRecruiter"),
-          ("Work authorization and engagement check","Email","A few questions about the {job_title} role","Hi {candidate_name},\\n\\nBefore we proceed with the {job_title} opportunity, could you please confirm your current work authorization and whether W2, C2C, or another engagement type is acceptable to you? Please share only the information you are comfortable providing.\\n\\nRegards,\\nRecruiter")
+          ("Follow-up","Email","Following up — {job_title}","Hi {candidate_name},\n\nI wanted to follow up on my earlier note about the {job_title} opportunity. If you are interested, I would be happy to share the details. If it is not a fit, no worries.\n\nRegards,\nRecruiter"),
+          ("Screening availability request","Email","Availability for a {job_title} discussion","Hi {candidate_name},\n\nWould you be available for a short discussion about the {job_title} opportunity? Please share a few time windows that work for you.\n\nRegards,\nRecruiter"),
+          ("Work authorization and engagement check","Email","A few questions about the {job_title} role","Hi {candidate_name},\n\nBefore we proceed with the {job_title} opportunity, could you please confirm your current work authorization and whether W2, C2C, or another engagement type is acceptable to you? Please share only the information you are comfortable providing.\n\nRegards,\nRecruiter")
         ]
         for name,channel,subject,body in defaults:
             exists=c.execute("SELECT id FROM communication_templates WHERE name=?",(name,)).fetchone()
