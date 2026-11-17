@@ -103,7 +103,25 @@ def analyze(text):
     if "Contract-to-Hire" in employment and "Contract" in employment: employment.remove("Contract")
     rate = re.search(r"(?:rate|pay|compensation|salary)\s*[:\-]?\s*([^\n]+)", text, re.I)
     arrangements = [x for x in ["Remote","Hybrid","Onsite","On-site"] if re.search(r"\b"+re.escape(x)+r"\b",text,re.I)]
-    domain = next((d for d, keys in [("AI/ML",["machine learning","deep learning","ai/ml","llm","genai"]),("Data Engineering",["data engineer","spark","kafka","databricks"]),("Cloud/DevOps",["devops engineer","cloud engineer","terraform"]),("QA/Testing",["qa engineer","quality assurance","automation testing"]),("Cybersecurity",["cybersecurity","security engineer"]),("Software Engineering",["software engineer","developer","java","python"])] if any(k in low for k in keys)), "General IT")
+    domain_rules = [
+        ("AI/ML",["ai/ml engineer","machine learning engineer","ml engineer","deep learning engineer","genai engineer"]),
+        ("Data Engineering",["data engineer","data engineering"]),
+        ("Cloud/DevOps",["devops engineer","cloud engineer","site reliability engineer","sre"]),
+        ("QA/Testing",["qa engineer","quality assurance engineer","automation test engineer","test automation engineer"]),
+        ("Cybersecurity",["cybersecurity engineer","security engineer","information security"]),
+        ("Software Engineering",["software engineer","java developer","python developer","full stack developer","backend developer","frontend developer","developer"])
+    ]
+    title_low = title.lower()
+    domain = next((d for d, keys in domain_rules if any(k in title_low for k in keys)), None)
+    if not domain:
+        domain = next((d for d, keys in [
+            ("AI/ML",["machine learning","deep learning","ai/ml","llm","genai"]),
+            ("Data Engineering",["data engineer","spark","kafka","databricks"]),
+            ("Cloud/DevOps",["devops engineer","cloud engineer","terraform"]),
+            ("QA/Testing",["qa engineer","quality assurance","automation testing"]),
+            ("Cybersecurity",["cybersecurity","security engineer"]),
+            ("Software Engineering",["software engineer","developer","java","python"])
+        ] if any(k in low for k in keys)), "General IT")
     responsibilities = section(text, ["responsibilities","what you'll do","what you will do","job duties"])
     education = section(text, ["education","education requirements"])
     certifications = section(text, ["certifications","certification requirements"])
