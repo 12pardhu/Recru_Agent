@@ -90,6 +90,7 @@ class CandidateIn(BaseModel):
     source_type:str="Manual"
     source_url:str=""
     source_evidence:str=""
+    sourcing_task_id:int|None=None
 
 @app.get("/api/health")
 def health(): return {"status":"ok","app":"Recru Agent","version":"3.0.0"}
@@ -114,9 +115,16 @@ def add_candidate(p:CandidateIn):
     with db() as c:
         if p.email and c.execute("SELECT id FROM candidates WHERE lower(email)=lower(?) AND email<>''",(p.email,)).fetchone(): raise HTTPException(409,"Possible duplicate: a candidate with this email already exists")
         if p.linkedin_url and c.execute("SELECT id FROM candidates WHERE lower(linkedin_url)=lower(?) AND linkedin_url<>''",(p.linkedin_url,)).fetchone(): raise HTTPException(409,"Possible duplicate: this LinkedIn profile is already saved")
-        cur=c.execute("""INSERT INTO candidates(name,email,location,experience,skills,work_auth,c2c_status,linkedin_url,resume_text,created_at,open_to_work,availability_signal,profile_updated,source_type,source_url,source_evidence,c2c_confirmed)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(p.name,p.email,p.location,p.experience,p.skills,p.work_auth,p.c2c_status,p.linkedin_url,p.resume_text,now(),p.open_to_work,p.availability_signal,p.profile_updated,p.source_type,p.source_url,p.source_evidence,p.c2c_confirmed))
-        return {"id":cur.lastrowid,"message":"Candidate saved"}
+        if p.sourcing_task_id:
+            task=c.execute("SELECT id,status FROM sourcing_tasks WHERE id=?",(p.sourcing_task_id,)).fetchone()
+            if not task: raise HTTPException(404,"Sourcing task not found.")
+            if task["status"]=="Completed": raise HTTPException(409,"This sourcing task is completed. Reopen it before adding more candidates.")
+        cur=c.execute("""INSERT INTO candidates(name,email,location,experience,skills,work_auth,c2c_status,linkedin_url,resume_text,created_at,open_to_work,availability_signal,profile_updated,source_type,source_url,source_evidence,c2c_confirmed,sourcing_task_id)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(p.name,p.email,p.location,p.experience,p.skills,p.work_auth,p.c2c_status,p.linkedin_url,p.resume_text,now(),p.open_to_work,p.availability_signal,p.profile_updated,p.source_type,p.source_url,p.source_evidence,p.c2c_confirmed,p.sourcing_task_id))
+        if p.sourcing_task_id:
+            c.execute("UPDATE sourcing_tasks SET status=CASE WHEN status='Prepared' THEN 'In Progress' ELSE status END WHERE id=?",(p.sourcing_task_id,))
+            c.execute("INSERT INTO sourcing_events(task_id,event_type,details,created_at) VALUES(?,?,?,?)",(p.sourcing_task_id,"Candidate captured","Candidate record #"+str(cur.lastrowid),now()))
+        return {"id":cur.lastrowid,"message":"Candidate saved with sourcing provenance" if p.sourcing_task_id else "Candidate saved"}
 def build_plan(job_id):
     js=rows("SELECT * FROM jobs WHERE id=?",(job_id,))
     if not js: raise HTTPException(404,"Job not found")
