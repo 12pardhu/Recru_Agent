@@ -374,6 +374,7 @@ from advanced_matching import router as advanced_matching_router
 from submissions import router as submissions_router
 from interviews import router as interviews_router
 from pipeline import router as pipeline_router, ensure_pipeline, advance_pipeline
+from offers import router as offers_router
 from productivity import router as productivity_router
 from privacy import router as privacy_router
 from requirement_intake import router as requirement_intake_router
@@ -388,6 +389,7 @@ app.include_router(advanced_matching_router)
 app.include_router(submissions_router)
 app.include_router(interviews_router)
 app.include_router(pipeline_router)
+app.include_router(offers_router)
 app.include_router(productivity_router)
 app.include_router(auth_router)
 app.include_router(privacy_router)
