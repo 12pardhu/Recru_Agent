@@ -93,11 +93,12 @@ def update_interview(interview_id:int,payload:dict):
     if link and not re.match(r"^https?://",link,re.I): raise HTTPException(400,"Meeting link must begin with http:// or https://.")
     confirm=payload.get("candidate_confirmation",old["candidate_confirmation"])
     if confirm not in ("Unknown","Confirmed","Declined"): raise HTTPException(400,"Candidate confirmation must be Unknown, Confirmed, or Declined.")
+    new_status="Cancelled" if confirm=="Declined" else "Rescheduled"
     with connect() as c:
-        c.execute("""UPDATE interviews SET scheduled_at=?,timezone=?,format=?,meeting_link=?,meeting_location=?,interviewer_names=?,candidate_confirmation=?,status='Rescheduled',updated_at=? WHERE id=?""",
-          (scheduled,str(payload.get("timezone",old["timezone"])),fmt,link,str(payload.get("meeting_location",old["meeting_location"])),str(payload.get("interviewer_names",old["interviewer_names"])),confirm,stamp(),interview_id))
-        c.execute("INSERT INTO interview_events(interview_id,event_type,details,created_at) VALUES(?,?,?,?)",(interview_id,"Interview updated","Schedule or participant details changed.",stamp()))
-    return {"id":interview_id,"status":"Rescheduled","message":"Interview details updated. Notify the candidate and interviewers manually."}
+        c.execute("""UPDATE interviews SET scheduled_at=?,timezone=?,format=?,meeting_link=?,meeting_location=?,interviewer_names=?,candidate_confirmation=?,status=?,updated_at=? WHERE id=?""",
+          (scheduled,str(payload.get("timezone",old["timezone"])),fmt,link,str(payload.get("meeting_location",old["meeting_location"])),str(payload.get("interviewer_names",old["interviewer_names"])),confirm,new_status,stamp(),interview_id))
+        c.execute("INSERT INTO interview_events(interview_id,event_type,details,created_at) VALUES(?,?,?,?)",(interview_id,"Interview updated","Schedule or participant details changed. Status: "+new_status,stamp()))
+    return {"id":interview_id,"status":new_status,"message":"Interview details updated. Notify the candidate and interviewers manually."}
 
 @router.patch("/{interview_id}/status")
 def update_interview_status(interview_id:int,payload:dict):
