@@ -80,5 +80,6 @@ $('#jdAnalyzeText').onclick=async()=>{try{const d=await api('/jd/drafts',{method
 $('#jdSaveEdits').onclick=async()=>{try{const d=await saveJdReview();showJdDraft(d);$('#jdDraftMessage').textContent='Review edits saved. The requirement is still a draft.'}catch(e){alert(e.message)}};
 $('#jdConfirm').onclick=async()=>{try{await saveJdReview();const r=await api('/jd/drafts/'+activeJdDraft+'/confirm',{method:'POST'});$('#jdDraftMessage').textContent=r.message+' Job ID: '+r.job_id+'. You can now prepare sourcing from Candidate Sourcing.';$('#jdReview').classList.add('hidden');await refresh()}catch(e){$('#jdDraftMessage').textContent=e.message}};
 
-refreshJdDrafts();\nrefresh().catch(e=>console.error(e));
+refreshJdDrafts();
+refresh().catch(e=>console.error(e));
 </script></body></html>
