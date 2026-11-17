@@ -137,8 +137,8 @@ def build_plan(job_id, target_count=50):
     j=js[0]
     if not rows("SELECT id FROM job_versions WHERE job_id=? LIMIT 1",(job_id,)):
         raise HTTPException(409,"This requirement has not completed recruiter review and confirmation. Use the JD review workflow first.")
-    if not isinstance(target_count,int) or target_count<1 or target_count>100:
-        raise HTTPException(400,"Daily sourcing target must be between 1 and 100.")
+    if not isinstance(target_count,int) or target_count<50 or target_count>100:
+        raise HTTPException(400,"Daily sourcing target must be between 50 and 100.")
     auth_terms=j.get("work_auth","")
     if auth_terms=="Unknown": auth_terms=""
     locations=[x.strip() for x in (j.get("location") or "").split(";") if x.strip()] or [""]
@@ -211,8 +211,8 @@ def update_sourcing_task(task_id:int,payload:dict):
     if status not in ("Prepared","In Progress","Paused","Completed"):
         raise HTTPException(400,"Status must be Prepared, In Progress, Paused, or Completed.")
     target=payload.get("target_count",task[0].get("target_count",50))
-    if not isinstance(target,int) or target<1 or target>100:
-        raise HTTPException(400,"Target must be between 1 and 100.")
+    if not isinstance(target,int) or target<50 or target>100:
+        raise HTTPException(400,"Target must be between 50 and 100.")
     notes=str(payload.get("notes",task[0].get("notes","")))
     if status=="Completed":
         pending_searches=rows("SELECT id FROM sourcing_searches WHERE task_id=? AND status NOT IN ('Completed','Skipped')",(task_id,))
