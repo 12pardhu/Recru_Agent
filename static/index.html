@@ -49,7 +49,8 @@ async function refreshJdDrafts(){
  try{const ds=await api('/jd/drafts');$('#jdDraftHistory').innerHTML='<h3>Saved JD drafts</h3>'+table(['Original file','Status','Last updated','Action'],ds.map(d=>'<tr><td>'+esc(d.original_filename||'Pasted JD')+'</td><td>'+esc(d.status)+'</td><td>'+esc(d.updated_at)+'</td><td><button type="button" onclick="reopenJdDraft(\''+d.id+'\')">Review draft</button></td></tr>'))}catch(e){$('#jdDraftHistory').textContent='Draft history unavailable: '+e.message}
 }
 window.reopenJdDraft=async id=>{try{const d=await api('/jd/drafts/'+id);showJdDraft(d)}catch(e){alert(e.message)}};
-\nfunction showJdDraft(d){
+
+function showJdDraft(d){
  activeJdDraft=d.id; const f=d.analysis.fields;
  $('#rvTitle').value=f.title||''; $('#rvDomain').value=f.domain||'';
  $('#rvLocations').value=(f.locations||[]).join('; ');
