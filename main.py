@@ -101,7 +101,6 @@ def add_job(j:JobIn):
     with db() as c:
         cur=c.execute("INSERT INTO jobs(title,location,min_experience,skills,work_auth,jd_text,created_at,domain,preferred_skills,employment_type,source_mode) VALUES(?,?,?,?,?,?,?,?,?,?,?)",(j.title.strip(),j.location,j.min_experience,j.skills,j.work_auth,j.jd_text,now(),j.domain,j.preferred_skills,j.employment_type,j.source_mode))
         jid=cur.lastrowid
-    # Both modes are prepared at intake. Auto mode creates a task; recruiter can also run it on demand.
     return {"id":jid,"message":"Requirement saved without sourcing. Use Job Requirement Intelligence to review and confirm before sourcing."}
 @app.get("/api/candidates")
 def get_candidates(): return rows("SELECT * FROM candidates ORDER BY id DESC")
@@ -155,6 +154,8 @@ async def upload_jd(file:UploadFile=File(...)):
 def match(job_id:int):
     js=rows("SELECT * FROM jobs WHERE id=?",(job_id,))
     if not js: raise HTTPException(404,"Job not found")
+    if not rows("SELECT id FROM job_versions WHERE job_id=? LIMIT 1",(job_id,)):
+        raise HTTPException(409,"Confirm the job requirement before running candidate matching.")
     j=js[0]; required={x.lower() for x in tokens(j["skills"])}; preferred={x.lower() for x in tokens(j.get("preferred_skills",""))}
     out=[]
     for p in rows("SELECT * FROM candidates"):
