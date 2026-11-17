@@ -117,26 +117,56 @@ def add_job(j:JobIn):
 def get_candidates(): return rows("SELECT * FROM candidates ORDER BY id DESC")
 @app.post("/api/candidates")
 def add_candidate(p:CandidateIn):
-    if not p.name.strip(): raise HTTPException(400,"Candidate name is required")
-    if (p.sourcing_task_id or "LinkedIn" in p.source_type) and not p.source_evidence.strip(): raise HTTPException(400,"Add the profile or candidate evidence you reviewed before saving a LinkedIn-sourced candidate.")
-    if p.work_auth!="Unknown" and p.work_auth_confirmed!="Candidate confirmed": raise HTTPException(400,"Only record OPT or other work authorization as confirmed when the candidate has confirmed it. Otherwise choose Unknown.")
-    if p.c2c_status in ("Confirmed","Not available") and p.c2c_confirmed!="Candidate confirmed": raise HTTPException(400,"C2C status must be confirmed by the candidate before recording a yes or no.")
-    if p.linkedin_url and not re.match(r"^https?://(www\.)?linkedin\.com/",p.linkedin_url.strip(),re.I): raise HTTPException(400,"Enter a valid LinkedIn profile URL")
-    if p.source_url and not re.match(r"^https?://",p.source_url.strip(),re.I): raise HTTPException(400,"Source URL must begin with http:// or https://.")
     with db() as c:
-        if p.email and c.execute("SELECT id FROM candidates WHERE lower(email)=lower(?) AND email<>''",(p.email,)).fetchone(): raise HTTPException(409,"Possible duplicate: a candidate with this email already exists")
-        if p.linkedin_url and c.execute("SELECT id FROM candidates WHERE lower(linkedin_url)=lower(?) AND linkedin_url<>''",(p.linkedin_url,)).fetchone(): raise HTTPException(409,"Possible duplicate: this LinkedIn profile is already saved")
+        resume_fields={}
+        resume_text=p.resume_text
+        if p.resume_draft_id:
+            draft=c.execute("SELECT * FROM resume_drafts WHERE id=?",(p.resume_draft_id,)).fetchone()
+            if not draft: raise HTTPException(404,"Resume draft not found.")
+            if draft["status"]=="Attached": raise HTTPException(409,"This resume is already attached to another candidate.")
+            resume_fields=json.loads(draft["parsed_json"]).get("fields",{})
+            resume_text=resume_text or draft["resume_text"]
+        name=p.name.strip() or str(resume_fields.get("name","")).strip()
+        email=p.email.strip() or str(resume_fields.get("email","")).strip()
+        location=p.location.strip() or str(resume_fields.get("location","")).strip()
+        experience=p.experience if p.experience else (resume_fields.get("experience") or 0)
+        skills=p.skills.strip() or ", ".join(resume_fields.get("skills") or [])
+        phone=p.phone.strip() or str(resume_fields.get("phone",""))
+        education=p.education.strip() or str(resume_fields.get("education",""))
+        certifications=p.certifications.strip() or str(resume_fields.get("certifications",""))
+        work_history=p.work_history.strip() or str(resume_fields.get("work_history",""))
+        linkedin_url=p.linkedin_url.strip() or next((x for x in resume_fields.get("profile_links",[]) if "linkedin.com" in x.lower()),"")
+        if not name: raise HTTPException(400,"Candidate name is required. Review the resume extraction or enter the name.")
+        if (p.sourcing_task_id or "LinkedIn" in p.source_type) and not p.source_evidence.strip():
+            raise HTTPException(400,"Add the profile or candidate evidence you reviewed before saving a LinkedIn-sourced candidate.")
+        if p.work_auth!="Unknown" and p.work_auth_confirmed!="Candidate confirmed":
+            raise HTTPException(400,"Only record OPT or other work authorization as confirmed when the candidate has confirmed it. Otherwise choose Unknown.")
+        if p.c2c_status in ("Confirmed","Not available") and p.c2c_confirmed!="Candidate confirmed":
+            raise HTTPException(400,"C2C status must be confirmed by the candidate before recording a yes or no.")
+        if linkedin_url and not re.match(r"^https?://(www\\.)?linkedin\\.com/",linkedin_url,re.I):
+            raise HTTPException(400,"Enter a valid LinkedIn profile URL.")
+        source_url=p.source_url.strip() or linkedin_url
+        if source_url and not re.match(r"^https?://",source_url,re.I):
+            raise HTTPException(400,"Source URL must begin with http:// or https://.")
+        if email and c.execute("SELECT id FROM candidates WHERE lower(email)=lower(?) AND email<>''",(email,)).fetchone():
+            raise HTTPException(409,"Possible duplicate: a candidate with this email already exists.")
+        if linkedin_url and c.execute("SELECT id FROM candidates WHERE lower(linkedin_url)=lower(?) AND linkedin_url<>''",(linkedin_url,)).fetchone():
+            raise HTTPException(409,"Possible duplicate: this LinkedIn profile is already saved.")
         if p.sourcing_task_id:
             task=c.execute("SELECT id,status FROM sourcing_tasks WHERE id=?",(p.sourcing_task_id,)).fetchone()
             if not task: raise HTTPException(404,"Sourcing task not found.")
-            if task["status"]=="Completed": raise HTTPException(409,"This sourcing task is completed. Reopen it before adding more candidates.")
+            if task["status"]=="Completed": raise HTTPException(409,"This sourcing task is completed. Reopen it before adding candidates.")
             if task["status"]=="Paused": raise HTTPException(409,"This sourcing task is paused. Resume it before adding candidates.")
-        cur=c.execute("""INSERT INTO candidates(name,email,location,experience,skills,work_auth,c2c_status,linkedin_url,resume_text,created_at,open_to_work,availability_signal,profile_updated,source_type,source_url,source_evidence,c2c_confirmed,work_auth_confirmed,sourcing_task_id)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",(p.name,p.email,p.location,p.experience,p.skills,(p.work_auth if p.work_auth_confirmed=="Candidate confirmed" else "Unknown"),p.c2c_status,p.linkedin_url,p.resume_text,now(),p.open_to_work,p.availability_signal,p.profile_updated,p.source_type,(p.source_url or p.linkedin_url),p.source_evidence,p.c2c_confirmed,p.work_auth_confirmed,p.sourcing_task_id))
+        cur=c.execute("""INSERT INTO candidates(name,email,location,experience,skills,work_auth,c2c_status,linkedin_url,resume_text,created_at,open_to_work,availability_signal,profile_updated,source_type,source_url,source_evidence,c2c_confirmed,work_auth_confirmed,sourcing_task_id,phone,education,certifications,work_history,resume_draft_id)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+          (name,email,location,experience,skills,(p.work_auth if p.work_auth_confirmed=="Candidate confirmed" else "Unknown"),p.c2c_status,linkedin_url,resume_text,now(),p.open_to_work,p.availability_signal,p.profile_updated,p.source_type,source_url,p.source_evidence,p.c2c_confirmed,p.work_auth_confirmed,p.sourcing_task_id,phone,education,certifications,work_history,p.resume_draft_id))
+        candidate_id=cur.lastrowid
+        if p.resume_draft_id:
+            c.execute("UPDATE resume_drafts SET status='Attached',candidate_id=?,updated_at=? WHERE id=?",(candidate_id,now(),p.resume_draft_id))
         if p.sourcing_task_id:
             c.execute("UPDATE sourcing_tasks SET status=CASE WHEN status='Prepared' THEN 'In Progress' ELSE status END WHERE id=?",(p.sourcing_task_id,))
-            c.execute("INSERT INTO sourcing_events(task_id,event_type,details,created_at) VALUES(?,?,?,?)",(p.sourcing_task_id,"Candidate captured","Candidate record #"+str(cur.lastrowid),now()))
-        return {"id":cur.lastrowid,"message":"Candidate saved with sourcing provenance" if p.sourcing_task_id else "Candidate saved"}
+            c.execute("INSERT INTO sourcing_events(task_id,event_type,details,created_at) VALUES(?,?,?,?)",(p.sourcing_task_id,"Candidate captured","Candidate record #"+str(candidate_id),now()))
+        return {"id":candidate_id,"message":"Candidate saved with reviewed resume" if p.resume_draft_id else ("Candidate saved with sourcing provenance" if p.sourcing_task_id else "Candidate saved")}
 def build_plan(job_id, target_count=50):
     js=rows("SELECT * FROM jobs WHERE id=?",(job_id,))
     if not js: raise HTTPException(404,"Job not found")
