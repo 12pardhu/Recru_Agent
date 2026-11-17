@@ -108,9 +108,16 @@ async function loadScreeningSession(){
 }
 $('#screenSession').onchange=()=>loadScreeningSession().catch(e=>alert(e.message));
 $('#createScreening').onclick=async()=>{const candidate_id=Number($('#screenCandidate').value),job_id=Number($('#screenJob').value);if(!candidate_id||!job_id)return alert('Select a candidate and confirmed job.');try{const s=await api('/screening/sessions',{method:'POST',body:JSON.stringify({candidate_id,job_id,scheduled_at:$('#screenScheduled').value})});$('#screeningMessage').textContent=s.message;await loadScreeningSessions();$('#screenSession').value=s.id;await loadScreeningSession()}catch(e){$('#screeningMessage').textContent=e.message}};
-$('#saveScreenAnswers').onclick=async()=>{if(!currentScreening)return;try{for(const a of currentScreening.answers){await api('/screening/sessions/'+currentScreening.id+'/answers/'+a.question_key,{method:'PATCH',body:JSON.stringify({answer:$('#screen-answer-'+a.question_key).value,confirmation_status:$('#screen-confirm-'+a.question_key).value,evidence:$('#screen-evidence-'+a.question_key).value})})}$('#screeningMessage').textContent='All screening answers saved.';await loadScreeningSession()}catch(e){$('#screeningMessage').textContent=e.message}};
+async function persistScreeningAnswers(){
+ if(!currentScreening)throw Error('Open a screening session first.');
+ for(const a of currentScreening.answers){
+  await api('/screening/sessions/'+currentScreening.id+'/answers/'+a.question_key,{method:'PATCH',body:JSON.stringify({answer:$('#screen-answer-'+a.question_key).value,confirmation_status:$('#screen-confirm-'+a.question_key).value,evidence:$('#screen-evidence-'+a.question_key).value})});
+ }
+ await loadScreeningSession();
+}
+$('#saveScreenAnswers').onclick=async()=>{try{await persistScreeningAnswers();$('#screeningMessage').textContent='All screening answers saved.'}catch(e){$('#screeningMessage').textContent=e.message}};
 $('#saveScreenSession').onclick=async()=>{if(!currentScreening)return;try{await api('/screening/sessions/'+currentScreening.id,{method:'PATCH',body:JSON.stringify({status:$('#screenStatus').value,scheduled_at:$('#screenScheduledEdit').value,recruiter_notes:$('#screenNotes').value})});$('#screeningMessage').textContent='Screening session updated.';await loadScreeningSessions()}catch(e){$('#screeningMessage').textContent=e.message}};
-$('#applyScreenAnswers').onclick=async()=>{if(!currentScreening)return;try{await $('#saveScreenAnswers').click();const r=await api('/screening/sessions/'+currentScreening.id+'/apply-confirmed',{method:'POST'});$('#screeningMessage').textContent=r.message+' Updated fields: '+r.updated_candidate_fields.join(', ')+'; consent: '+r.submission_consent+'.';await refresh();await loadScreeningSession()}catch(e){$('#screeningMessage').textContent=e.message}};
+$('#applyScreenAnswers').onclick=async()=>{if(!currentScreening)return;try{await persistScreeningAnswers();const r=await api('/screening/sessions/'+currentScreening.id+'/apply-confirmed',{method:'POST'});$('#screeningMessage').textContent=r.message+' Updated fields: '+r.updated_candidate_fields.join(', ')+'; consent: '+r.submission_consent+'.';await refresh();await loadScreeningSession()}catch(e){$('#screeningMessage').textContent=e.message}};
 let communicationTemplates=[];
 async function loadCommunicationTemplates(){
  communicationTemplates=await api('/communications/templates');
