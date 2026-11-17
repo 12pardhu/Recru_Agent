@@ -45,11 +45,18 @@ def extract_jd(text):
     found=[s.strip() for s in skill_bank if s.strip() and s.strip() in low]
     exp=re.search(r"(\d+)\s*\+?\s*(?:years|yrs)",low)
     loc=[]
-    for pattern in [r"location\s*[:\-]\s*([^\n,;]+(?:,\s*[A-Z]{2})?)",r"based in\s+([^\n,;]+)"]:
-        m=re.search(pattern,text,re.I)
-        if m: loc.append(m.group(1).strip()); break
+    # Preserve every city/state pair from a labelled location line.
+    m=re.search(r"^\\s*locations?\\s*[:\\-]\\s*(.+?)\\s*$",text,re.I|re.M)
+    if m:
+        raw_location=m.group(1).strip()
+        normalized=re.sub(r"\\s*(?:/|\\||;|\\band\\b)\\s*","; ",raw_location,flags=re.I)
+        loc=[x.strip(" ,") for x in normalized.split(";") if x.strip(" ,")]
+    else:
+        m=re.search(r"based in\\s+([^\\n]+)",text,re.I)
+        if m: loc=[m.group(1).strip()]
     auth=next((x for x in ["STEM OPT","OPT","H-1B","Green Card","US Citizen"] if x.lower() in low),"Unknown")
-    domain=next((x for x in ["AI/ML","Data Engineering","Cloud/DevOps","Software Engineering","QA/Testing","Cybersecurity"] if any(k in low for k in {"AI/ML":["machine learning","deep learning","llm","ai/ml"],"Data Engineering":["data engineer","spark","kafka","databricks"],"Cloud/DevOps":["devops","aws","azure","kubernetes"],"Software Engineering":["developer","software engineer","java","python"],"QA/Testing":["qa","automation testing"],"Cybersecurity":["security engineer","cybersecurity"]}[x])),"General IT")
+    # Cloud keywords alone (for example AWS) must not override a software developer role.
+    domain=next((x for x in ["AI/ML","Data Engineering","Software Engineering","Cloud/DevOps","QA/Testing","Cybersecurity"] if any(k in low for k in {"AI/ML":["machine learning","deep learning","llm","ai/ml"],"Data Engineering":["data engineer","spark","kafka","databricks"],"Software Engineering":["developer","software engineer","java","python"],"Cloud/DevOps":["devops engineer","cloud engineer","kubernetes","terraform"],"QA/Testing":["qa","automation testing"],"Cybersecurity":["security engineer","cybersecurity"]}[x])), "General IT")
     return {"title":title[:120],"domain":domain,"location":loc[0] if loc else "","min_experience":int(exp.group(1)) if exp else 0,"skills":", ".join(found),"preferred_skills":"","work_auth":auth,"employment_type":"Unknown","jd_text":text}
 
 class JobIn(BaseModel):
@@ -112,8 +119,10 @@ def build_plan(job_id):
     js=rows("SELECT * FROM jobs WHERE id=?",(job_id,))
     if not js: raise HTTPException(404,"Job not found")
     j=js[0]
-    keywords=" ".join([j["title"],j.get("domain",""),j["skills"],j["location"]]).strip()
-    query=" ".join(x for x in [j["title"],j.get("domain",""),j["skills"],j["location"],"Open to Work"] if x)
+    # Use role-specific terms and all JD locations; omit broad inferred domain labels.
+    # Authorization terms are search hints only, never proof of a candidate's status.
+    auth_terms=j.get("work_auth","")
+    query=" ".join(x for x in [j["title"],j["skills"],j["location"],auth_terms,"Open to Work"] if x)
     url="https://www.linkedin.com/search/results/people/?keywords="+quote_plus(query)
     with db() as c:
         cur=c.execute("INSERT INTO sourcing_tasks(job_id,mode,query_text,linkedin_url,status,created_at) VALUES(?,?,?,?,?,?)",(job_id,"Both",query,url,"Prepared",now()))
