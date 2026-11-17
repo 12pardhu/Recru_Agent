@@ -1,5 +1,16 @@
 # Recru Agent
 
+## OPT Recruiter Pilot Testing
+
+The development branch includes a recruiter pilot test pack:
+
+- [Comprehensive OPT Recruiter Pilot Test Suite](docs/OPT_RECRUITER_PILOT_TEST_SUITE.md) — end-to-end test cases from login and requirement intake through sourcing, screening, consent/RTR, submissions, interviews, offers, joining, follow-ups, privacy and reliability.
+- [Tester Feedback Template](docs/OPT_RECRUITER_PILOT_FEEDBACK_TEMPLATE.md) — structured bug and workflow-improvement reports.
+- [Pilot Safety Boundaries](docs/SAFE_USE.md) — synthetic-data-only restrictions and production blockers.
+
+**Pilot warning:** The current Render Free deployment uses local SQLite/filesystem storage and is not approved for real candidate/client data. Use synthetic test records only. Green smoke CI checks do not mean the functional test suite has passed.
+
+
 Cloud-hosted recruiter-assist application for US IT staffing. The development branch now contains application implementations for all 12 milestones, including job requirement intelligence, sourcing, resume intelligence, qualification, communication, OPT screening, matching, client submissions, interviews, recruitment pipeline, productivity reporting, and application-level security/privacy controls. Runtime verification and the formal test suite are intentionally deferred until the development build is complete. Production release remains blocked on persistent managed storage, deployment hardening, formal security review, and release sign-off.
 
 ## Milestone 1: Job Requirement Intelligence
