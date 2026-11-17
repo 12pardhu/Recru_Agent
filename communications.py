@@ -34,6 +34,14 @@ def init():
           id INTEGER PRIMARY KEY, message_id INTEGER NOT NULL, event_type TEXT NOT NULL,
           details TEXT DEFAULT '', created_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS candidate_contact_interactions(
+          id INTEGER PRIMARY KEY, candidate_id INTEGER NOT NULL, job_id INTEGER,
+          channel TEXT NOT NULL, direction TEXT NOT NULL DEFAULT 'Outbound',
+          outcome TEXT NOT NULL DEFAULT 'Attempted', notes TEXT DEFAULT '',
+          follow_up_at TEXT DEFAULT '', created_at TEXT NOT NULL, created_by TEXT DEFAULT 'Recruiter'
+        );
+        CREATE INDEX IF NOT EXISTS idx_contact_interactions_candidate ON candidate_contact_interactions(candidate_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_contact_interactions_followup ON candidate_contact_interactions(follow_up_at);
         """)
         defaults=[
           ("Initial opportunity outreach","Email","Opportunity to discuss {job_title}","Hi {candidate_name},\n\nI am reaching out about a {job_title} opportunity{location_phrase}. Your background in {skills} may be relevant to the role. Would you be open to a brief conversation to learn more?\n\nIf interested, please let me know a convenient time.\n\nRegards,\nRecruiter"),
@@ -52,6 +60,16 @@ class MessageEdit(BaseModel):
     subject: str = ""
     body: str
 
+class ContactInteraction(BaseModel):
+    candidate_id: int
+    job_id: int | None = None
+    channel: str
+    direction: str = "Outbound"
+    outcome: str = "Attempted"
+    notes: str = ""
+    follow_up_at: str = ""
+    created_by: str = "Recruiter"
+
 def rows(sql,args=()):
     with connect() as c: return [dict(r) for r in c.execute(sql,args).fetchall()]
 
@@ -69,6 +87,70 @@ def render(template,value):
         subject=subject.replace("{"+key+"}",val)
         body=body.replace("{"+key+"}",val)
     return subject,body
+
+
+@router.get("/interactions")
+def list_interactions(candidate_id: int | None = None, job_id: int | None = None, due_only: bool = False):
+    sql = """SELECT i.*, c.name candidate_name, j.title job_title
+             FROM candidate_contact_interactions i
+             JOIN candidates c ON c.id=i.candidate_id
+             LEFT JOIN jobs j ON j.id=i.job_id WHERE 1=1"""
+    args = []
+    if candidate_id is not None:
+        sql += " AND i.candidate_id=?"; args.append(candidate_id)
+    if job_id is not None:
+        sql += " AND i.job_id=?"; args.append(job_id)
+    if due_only:
+        sql += " AND i.follow_up_at<>'' AND i.follow_up_at<=?"
+        args.append(stamp())
+    sql += " ORDER BY CASE WHEN i.follow_up_at='' THEN 1 ELSE 0 END, i.follow_up_at, i.id DESC"
+    return rows(sql, tuple(args))
+
+
+@router.post("/interactions")
+def create_interaction(payload: ContactInteraction):
+    allowed_channels = {"LinkedIn", "Phone", "Email", "WhatsApp"}
+    allowed_directions = {"Outbound", "Inbound"}
+    allowed_outcomes = {"Attempted", "Connected", "No Answer", "Voicemail", "Replied", "Interested", "Not Interested", "Follow-up Needed", "Do Not Contact"}
+    if payload.channel not in allowed_channels:
+        raise HTTPException(400, "Channel must be LinkedIn, Phone, Email, or WhatsApp.")
+    if payload.direction not in allowed_directions:
+        raise HTTPException(400, "Direction must be Inbound or Outbound.")
+    if payload.outcome not in allowed_outcomes:
+        raise HTTPException(400, "Choose a supported contact outcome.")
+    if not rows("SELECT id FROM candidates WHERE id=?", (payload.candidate_id,)):
+        raise HTTPException(404, "Candidate not found.")
+    if payload.job_id is not None and not rows("SELECT id FROM jobs WHERE id=?", (payload.job_id,)):
+        raise HTTPException(404, "Job requirement not found.")
+    candidate = rows("SELECT do_not_contact,contact_preference FROM candidates WHERE id=?", (payload.candidate_id,))[0]
+    if payload.direction == "Outbound" and (candidate.get("do_not_contact") or candidate.get("contact_preference") == "Do not contact"):
+        raise HTTPException(409, "Candidate is marked Do not contact; outbound contact cannot be logged.")
+    if payload.follow_up_at:
+        try:
+            datetime.fromisoformat(payload.follow_up_at.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(400, "Follow-up must be a valid ISO date/time.")
+    with connect() as c:
+        cur = c.execute("""INSERT INTO candidate_contact_interactions
+          (candidate_id,job_id,channel,direction,outcome,notes,follow_up_at,created_at,created_by)
+          VALUES(?,?,?,?,?,?,?,?,?)""",
+          (payload.candidate_id,payload.job_id,payload.channel,payload.direction,payload.outcome,
+           payload.notes.strip(),payload.follow_up_at,stamp(),payload.created_by.strip() or "Recruiter"))
+        interaction_id = cur.lastrowid
+        if payload.outcome == "Do Not Contact":
+            c.execute("UPDATE candidates SET do_not_contact=1, contact_preference='Do not contact' WHERE id=?", (payload.candidate_id,))
+    return {"id": interaction_id, "message": "Contact activity recorded. No message or call was initiated by Recru Agent."}
+
+
+@router.get("/interactions/{interaction_id}")
+def get_interaction(interaction_id: int):
+    data = rows("""SELECT i.*,c.name candidate_name,j.title job_title
+                   FROM candidate_contact_interactions i
+                   JOIN candidates c ON c.id=i.candidate_id
+                   LEFT JOIN jobs j ON j.id=i.job_id WHERE i.id=?""", (interaction_id,))
+    if not data:
+        raise HTTPException(404, "Contact activity not found.")
+    return data[0]
 
 @router.get("/templates")
 def list_templates():
