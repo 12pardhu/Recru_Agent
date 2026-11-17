@@ -1,6 +1,6 @@
 # Recru Agent
 
-Cloud-hosted recruiter-assist application for US IT staffing. The product is being developed in 12 milestones. The current development branch contains the completed development implementation for **Milestone 1 — Job Requirement Intelligence** **Milestone 2 — Candidate Sourcing Intelligence** and the in-progress **Milestone 3 — Resume Intelligence**. Runtime verification and formal test/sign-off are intentionally deferred until all 12 development milestones are built.
+Cloud-hosted recruiter-assist application for US IT staffing. The product is being developed in 12 milestones. The current development branch contains the completed development implementation for **Milestone 1 — Job Requirement Intelligence** **Milestone 2 — Candidate Sourcing Intelligence** **Milestone 3 — Resume Intelligence** and the in-progress **Milestone 4 — Candidate Qualification**. Runtime verification and formal test/sign-off are intentionally deferred until all 12 development milestones are built.
 
 ## Milestone 1: Job Requirement Intelligence
 
@@ -36,6 +36,18 @@ Cloud-hosted recruiter-assist application for US IT staffing. The product is bei
 - Resume parsing does not infer or confirm OPT/STEM OPT, other work authorization, C2C status, Open to Work, or availability.
 
 **Important:** resume extraction is rule-based and may miss content in scanned PDFs, complex layouts, columns, images, or unusual resume formats. OCR is not included. Human review is required.
+
+## Milestone 4: Candidate Qualification (in development)
+
+- Compare a candidate record with a confirmed job requirement using transparent criterion-level rules.
+- Review total experience, mandatory and preferred skills, location, candidate-confirmed work authorization, and candidate-confirmed C2C/W2 engagement preference.
+- Display Potential match, Partial match, Unknown, Not specified, Needs recruiter review, and potential blocker statuses with evidence/provenance.
+- Missing resume skills are not treated as proof that a candidate lacks a skill. Resume-stated experience and skills remain subject to verification.
+- Save recruiter decisions and notes: Proceed to Screening, Hold, Not a Fit, or Needs More Information.
+- Record qualification generation and recruiter-decision activity history.
+- No automatic rejection, outreach, representation, or client submission is performed.
+
+**Important:** qualification is an evidence-based screening aid, not a hiring decision. Recruiters remain responsible for verifying information and choosing the next step.
 
 ## Existing recruiter-assist features
 
@@ -80,4 +92,4 @@ No login, role-based access control, tenant isolation, managed persistent databa
 11. Recruiter Productivity Dashboard
 12. Security, Quality and Release
 
-Milestone 1 development implementation is complete; its runtime verification and test/sign-off remain deferred. Milestone 2 development implementation is complete; runtime verification and testing remain deferred. Milestone 3 is under development.
+Milestone 1 development implementation is complete; its runtime verification and test/sign-off remain deferred. Milestone 2 development implementation is complete; runtime verification and testing remain deferred. Milestone 3 development implementation is complete; runtime verification and testing remain deferred. Milestone 4 is under development.
