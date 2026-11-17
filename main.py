@@ -119,6 +119,9 @@ def build_plan(job_id):
     js=rows("SELECT * FROM jobs WHERE id=?",(job_id,))
     if not js: raise HTTPException(404,"Job not found")
     j=js[0]
+    # Only recruiter-confirmed JD records (with a version snapshot) may enter sourcing.
+    if not rows("SELECT id FROM job_versions WHERE job_id=? LIMIT 1",(job_id,)):
+        raise HTTPException(409,"This requirement has not completed recruiter review and confirmation. Use the JD review workflow first.")
     # Use role-specific terms and all JD locations; omit broad inferred domain labels.
     # Authorization terms are search hints only, never proof of a candidate's status.
     auth_terms=j.get("work_auth","")
