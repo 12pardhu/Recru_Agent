@@ -1,6 +1,6 @@
 # Recru Agent
 
-Cloud-hosted recruiter-assist application for US IT staffing. The product is being developed in 12 milestones. The current development branch contains the in-progress **Milestone 1 — Job Requirement Intelligence** implementation.
+Cloud-hosted recruiter-assist application for US IT staffing. The product is being developed in 12 milestones. The current development branch contains the completed development implementation for **Milestone 1 — Job Requirement Intelligence** and the in-progress **Milestone 2 — Candidate Sourcing Intelligence**. Runtime verification and formal test/sign-off are intentionally deferred until all 12 development milestones are built.
 
 ## Milestone 1: Job Requirement Intelligence
 
@@ -13,6 +13,18 @@ Cloud-hosted recruiter-assist application for US IT staffing. The product is bei
 - Sourcing and candidate matching require a confirmed requirement. Confirmation itself does not launch sourcing.
 
 **Important:** extraction is deterministic rule/keyword parsing, not a connected LLM or external AI service. It is an assistive first pass, not a substitute for recruiter review. Unknown information must remain unknown.
+
+## Milestone 2: Candidate Sourcing Intelligence (in development)
+
+- Generate focused LinkedIn People search variants for each JD location: role, skills, and authorization hints where stated.
+- Set a recruiter-controlled sourcing target (1–100 candidates per task).
+- Track each location/search variant as Prepared, In Progress, Completed, or Skipped.
+- Track sourcing task status, target count, recruiter notes, candidate count, timestamps, and activity history.
+- Capture candidate records manually after recruiter review in an authorized LinkedIn session.
+- Link each candidate to the sourcing task and preserve source type, URL, evidence notes, and capture activity.
+- Detect duplicate candidate email/profile URLs before saving.
+- Require candidate confirmation before recording OPT/STEM OPT or other work authorization as confirmed; require candidate confirmation for C2C yes/no.
+- Do not scrape LinkedIn or automatically extract profile data. Open to Work remains a profile signal, not proof of candidate availability.
 
 ## Existing recruiter-assist features
 
@@ -57,4 +69,4 @@ No login, role-based access control, tenant isolation, managed persistent databa
 11. Recruiter Productivity Dashboard
 12. Security, Quality and Release
 
-Milestone 1 remains under development until implementation, integration, and the later deferred test/sign-off stage are complete.
+Milestone 1 development implementation is complete; its runtime verification and test/sign-off remain deferred. Milestone 2 is under development.
