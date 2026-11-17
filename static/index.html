@@ -98,6 +98,8 @@ $('#candidateSourcingTask').innerHTML='<option value="">Manual / not linked</opt
 $('#communicationCandidate').innerHTML=p.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' — '+esc(x.location)+'</option>').join('');
 $('#contactCandidate').innerHTML=p.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' — '+esc(x.location)+'</option>').join('');
 $('#contactJob').innerHTML='<option value="">General / no job selected</option>'+opts;
+$('#followupCandidate').innerHTML='<option value="">No candidate selected</option>'+p.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' — '+esc(x.location)+'</option>').join('');
+$('#followupJob').innerHTML='<option value="">No job selected</option>'+opts;
 $('#communicationJob').innerHTML='<option value="">General / no job selected</option>'+opts;
 $('#screenCandidate').innerHTML=p.map(x=>'<option value="'+x.id+'">'+esc(x.name)+' — '+esc(x.location)+'</option>').join('');
 $('#screenJob').innerHTML=opts;
@@ -111,6 +113,7 @@ loadSubmissionData().catch(e=>console.warn(e));
 loadInterviewData().catch(e=>console.warn(e));
 loadPipelineData().catch(e=>console.warn(e));
 loadOffers().catch(e=>console.warn(e));
+loadFollowups().catch(e=>console.warn(e));
 loadProductivityData().catch(e=>console.warn(e));
 }
 async function loadQualifications(){
@@ -347,6 +350,43 @@ $('#saveOffer').onclick=async()=>{
  const onboarding_checklist={};document.querySelectorAll('[data-onboard]').forEach(el=>onboarding_checklist[onboardingTasks[Number(el.dataset.onboard)]]=el.checked);
  const payload={offer_status:$('#offerStatus').value,joining_status:$('#joiningStatus').value,joined_at:$('#joinedAt').value,follow_up_at:$('#offerFollowUp').value,follow_up_notes:$('#offerFollowUpNotes').value,onboarding_checklist,event_details:$('#offerEventDetails').value};
  try{const r=await api('/offers/'+id,{method:'PATCH',body:JSON.stringify(payload)});$('#offerUpdateMessage').textContent=r.message;$('#offerEventDetails').value='';await loadOffers();$('#offerSelect').value=id;await loadOfferRecord()}catch(e){$('#offerUpdateMessage').textContent=e.message}
+};
+
+
+let recruiterFollowups=[];
+function localInputValue(v){if(!v)return '';const d=new Date(v);if(Number.isNaN(d.getTime()))return '';const off=d.getTimezoneOffset();return new Date(d.getTime()-off*60000).toISOString().slice(0,16)}
+async function loadFollowups(){
+ try{
+  const q=new URLSearchParams();if($('#followupFilter').value)q.set('status',$('#followupFilter').value);if($('#followupDueOnly').checked)q.set('due_only','true');
+  recruiterFollowups=await api('/followups'+(q.toString()?'?'+q.toString():''));
+  const now=Date.now(),open=recruiterFollowups.filter(x=>['Open','In Progress'].includes(x.status));
+  const counts={Open:open.length,Overdue:open.filter(x=>new Date(x.due_at).getTime()<now).length,High:open.filter(x=>['High','Urgent'].includes(x.priority)).length,Completed:recruiterFollowups.filter(x=>x.status==='Completed').length};
+  $('#followupSummary').innerHTML=Object.entries(counts).map(([k,v])=>'<div class="stat">'+esc(k)+'<b>'+v+'</b></div>').join('');
+  $('#followupList').innerHTML=recruiterFollowups.length?table(['Action','Type','Candidate / Job','Contact','Due','Priority','Status','Owner'],recruiterFollowups.map(x=>'<tr><td>'+esc(x.title)+'</td><td>'+esc(x.followup_type)+'</td><td>'+esc([x.candidate_name,x.job_title].filter(Boolean).join(' / ')||'—')+'</td><td>'+esc(x.related_party||'—')+'</td><td>'+esc(x.due_at)+'</td><td>'+esc(x.priority)+'</td><td>'+esc(x.status)+'</td><td>'+esc(x.assigned_to||'—')+'</td></tr>')):'<p class="muted">No follow-up reminders match this filter.</p>';
+  const prev=$('#followupSelect').value;$('#followupSelect').innerHTML=recruiterFollowups.map(x=>'<option value="'+x.id+'">#'+x.id+' · '+esc(x.title)+' · '+esc(x.status)+'</option>').join('');
+  if(recruiterFollowups.some(x=>String(x.id)===prev))$('#followupSelect').value=prev;else if(recruiterFollowups.length)$('#followupSelect').value=recruiterFollowups[0].id;
+  if(recruiterFollowups.length)loadFollowupRecord();else $('#followupEditMessage').textContent='No reminder selected.';
+ }catch(e){$('#followupMessage').textContent=e.message}
+}
+async function loadFollowupRecord(){
+ const x=recruiterFollowups.find(v=>String(v.id)===$('#followupSelect').value);if(!x)return;
+ $('#followupEditStatus').value=x.status;$('#followupEditPriority').value=x.priority;$('#followupEditDue').value=localInputValue(x.due_at);$('#followupEditOwner').value=x.assigned_to||'';$('#followupEditNotes').value=x.notes||'';
+}
+$('#followupSelect').onchange=loadFollowupRecord;
+$('#refreshFollowups').onclick=()=>loadFollowups();
+$('#followupFilter').onchange=()=>loadFollowups();
+$('#followupDueOnly').onchange=()=>loadFollowups();
+$('#createFollowup').onclick=async()=>{
+ const title=$('#followupTitle').value.trim(),due=$('#followupDueAt').value;
+ if(!title||!due){$('#followupMessage').textContent='Enter a reminder title and due date/time.';return}
+ const payload={title,followup_type:$('#followupType').value,candidate_id:$('#followupCandidate').value?Number($('#followupCandidate').value):null,job_id:$('#followupJob').value?Number($('#followupJob').value):null,related_party:$('#followupParty').value,due_at:new Date(due).toISOString(),priority:$('#followupPriority').value,assigned_to:$('#followupOwner').value,notes:$('#followupNotes').value};
+ try{const r=await api('/followups',{method:'POST',body:JSON.stringify(payload)});$('#followupMessage').textContent=r.message;$('#followupTitle').value='';$('#followupNotes').value='';await loadFollowups();$('#followupSelect').value=r.id;loadFollowupRecord()}catch(e){$('#followupMessage').textContent=e.message}
+};
+$('#saveFollowup').onclick=async()=>{
+ const id=$('#followupSelect').value;if(!id)return;
+ const due=$('#followupEditDue').value;if(!due){$('#followupEditMessage').textContent='Due date/time is required.';return}
+ const payload={status:$('#followupEditStatus').value,priority:$('#followupEditPriority').value,due_at:new Date(due).toISOString(),assigned_to:$('#followupEditOwner').value,notes:$('#followupEditNotes').value};
+ try{const r=await api('/followups/'+id,{method:'PATCH',body:JSON.stringify(payload)});$('#followupEditMessage').textContent=r.message;await loadFollowups();$('#followupSelect').value=id;loadFollowupRecord()}catch(e){$('#followupEditMessage').textContent=e.message}
 };
 
 async function loadScreeningSessions(){
