@@ -41,9 +41,10 @@ def ensure_pipeline(candidate_id,job_id,stage="Sourcing"):
     if stage not in STAGES: raise HTTPException(400,"Invalid recruitment pipeline stage.")
     existing=rows("SELECT id,current_stage FROM recruitment_pipeline WHERE candidate_id=? AND job_id=?",(candidate_id,job_id))
     if existing: return existing[0]["id"]
+    initial_status = "Completed" if stage in ("Placed","Rejected","Withdrawn") else "Active"
     with connect() as c:
-        cur=c.execute("INSERT INTO recruitment_pipeline(candidate_id,job_id,current_stage,stage_status,created_at,updated_at) VALUES(?,? ,?,'Active',?,?)",
-          (candidate_id,job_id,stage,stamp(),stamp()))
+        cur=c.execute("INSERT INTO recruitment_pipeline(candidate_id,job_id,current_stage,stage_status,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+          (candidate_id,job_id,stage,initial_status,stamp(),stamp()))
         pid=cur.lastrowid
         c.execute("INSERT INTO pipeline_events(pipeline_id,event_type,details,created_at) VALUES(?,?,?,?)",(pid,"Pipeline created","Initial stage: "+stage,stamp()))
     return pid
