@@ -241,7 +241,9 @@ def confirm_draft(draft_id: str, payload: dict = None):
     skills = ", ".join(f.get("mandatory_skills") or []); preferred = ", ".join(f.get("preferred_skills") or [])
     auth = ", ".join(f.get("work_authorization") or []) or "Unknown"
     for key in d["analysis"].get("evidence",{}):
-        d["analysis"]["evidence"][key]["status"] = "Recruiter confirmed"
+        value = f.get(key)
+        missing = value in ("", [], None, {}) or value == ["Unknown"] or value == "New Job Requirement"
+        d["analysis"]["evidence"][key]["status"] = "Missing" if missing else "Recruiter confirmed"
     employment_value = f.get("employment_type") or ["Unknown"]
     employment = ", ".join(employment_value if isinstance(employment_value,list) else [str(employment_value)])
     with connect() as c:
