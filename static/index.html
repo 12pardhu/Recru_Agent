@@ -105,6 +105,7 @@ loadScreeningSessions().catch(e=>console.warn(e));
 loadSubmissionData().catch(e=>console.warn(e));
 loadInterviewData().catch(e=>console.warn(e));
 loadPipelineData().catch(e=>console.warn(e));
+loadOffers().catch(e=>console.warn(e));
 loadProductivityData().catch(e=>console.warn(e));
 }
 async function loadQualifications(){
@@ -304,6 +305,45 @@ window.viewSubmissionHistory=async id=>{try{const h=await api('/submissions/'+id
 $('#saveClient').onclick=async()=>{const company_name=$('#clientCompany').value.trim();if(!company_name)return alert('Enter a company name.');try{await api('/submissions/clients',{method:'POST',body:JSON.stringify({company_name,contact_name:$('#clientContact').value,email:$('#clientEmail').value,phone:$('#clientPhone').value,notes:$('#clientNotes').value})});$('#submissionMessage').textContent='Client saved.';await loadSubmissionData()}catch(e){$('#submissionMessage').textContent=e.message}};
 $('#createSubmission').onclick=async()=>{const client_id=Number($('#submissionClient').value),candidate_id=Number($('#submissionCandidate').value),job_id=Number($('#submissionJob').value),screening_session_id=Number($('#submissionScreening').value);if(!client_id||!candidate_id||!job_id||!screening_session_id)return alert('Select a client, candidate, confirmed job and completed consented screening session.');try{const r=await api('/submissions/drafts',{method:'POST',body:JSON.stringify({client_id,candidate_id,job_id,screening_session_id,submitted_rate:$('#submissionRate').value,recruiter_notes:$('#submissionNotes').value})});$('#submissionMessage').textContent=r.message;await loadSubmissionData()}catch(e){$('#submissionMessage').textContent=e.message}};
 let currentScreening=null;
+
+let offerItems=[];
+const onboardingTasks=['Offer terms confirmed','Candidate acceptance confirmed','Start date confirmed','Client onboarding instructions received','Required employment documents verified through approved HR process','First-day details confirmed','Recruiter joining check completed'];
+async function loadOffers(){
+ try{
+  const [offers,subs]=await Promise.all([api('/offers'),api('/submissions')]);offerItems=offers;
+  const counts={Offers:offers.length,Accepted:offers.filter(x=>x.offer_status==='Accepted').length,Joined:offers.filter(x=>x.joining_status==='Joined').length,'Follow-ups due':offers.filter(x=>x.follow_up_at&&new Date(x.follow_up_at)<=new Date()).length};
+  $('#offerSummary').innerHTML=Object.entries(counts).map(([k,v])=>'<div class="stat">'+esc(k)+'<b>'+v+'</b></div>').join('');
+  $('#offerList').innerHTML=table(['Candidate','Job','Client','Offer type','Rate','Offer status','Joining','Start date','Follow-up'],offers.map(x=>'<tr><td>'+esc(x.candidate_name)+'</td><td>'+esc(x.job_title)+'</td><td>'+esc(x.company_name)+'</td><td>'+esc(x.offer_type)+'</td><td>'+esc(x.offered_rate)+' '+esc(x.currency)+' / '+esc(x.pay_frequency)+'</td><td>'+esc(x.offer_status)+'</td><td>'+esc(x.joining_status)+'</td><td>'+esc(x.planned_start_date||'—')+'</td><td>'+esc(x.follow_up_at||'—')+'</td></tr>'));
+  $('#offerSubmission').innerHTML=subs.filter(x=>x.feedback_status==='Offer'&&['Manually Submitted','Client Feedback'].includes(x.status)).map(x=>'<option value="'+x.id+'">#'+x.id+' · '+esc(x.candidate_name)+' · '+esc(x.job_title)+' · '+esc(x.company_name)+'</option>').join('');
+  const prev=$('#offerSelect').value;
+  $('#offerSelect').innerHTML=offers.map(x=>'<option value="'+x.id+'">#'+x.id+' · '+esc(x.candidate_name)+' · '+esc(x.job_title)+' · '+esc(x.offer_status)+'</option>').join('');
+  if(offers.some(x=>String(x.id)===prev))$('#offerSelect').value=prev;else if(offers.length)$('#offerSelect').value=offers[0].id;
+  if(offers.length)await loadOfferRecord();else $('#offerHistory').innerHTML='';
+ }catch(e){$('#offerMessage').textContent=e.message}
+}
+async function loadOfferRecord(){
+ const id=$('#offerSelect').value;if(!id)return;
+ const x=await api('/offers/'+id);
+ $('#offerStatus').value=x.offer_status;$('#joiningStatus').value=x.joining_status;
+ $('#joinedAt').value=(x.joined_at||'').slice(0,10);$('#offerFollowUp').value=(x.follow_up_at||'').slice(0,10);
+ $('#offerFollowUpNotes').value=x.follow_up_notes||'';
+ const checklist=x.onboarding_checklist||{};
+ $('#onboardingChecklist').innerHTML=onboardingTasks.map((t,i)=>'<label><input type="checkbox" data-onboard="'+i+'" '+(checklist[t]?'checked':'')+' style="width:auto"> '+esc(t)+'</label>').join('');
+ $('#offerHistory').innerHTML=table(['Event','Details','Time'],(x.events||[]).map(e=>'<tr><td>'+esc(e.event_type)+'</td><td>'+esc(e.details)+'</td><td>'+esc(e.created_at)+'</td></tr>'));
+}
+$('#offerSelect').onchange=()=>loadOfferRecord().catch(e=>$('#offerUpdateMessage').textContent=e.message);
+$('#createOffer').onclick=async()=>{
+ const submission_id=Number($('#offerSubmission').value);if(!submission_id)return alert('Choose a client submission with Offer feedback.');
+ const payload={submission_id,offer_type:$('#offerType').value,offered_rate:$('#offerRate').value,currency:$('#offerCurrency').value,pay_frequency:$('#offerFrequency').value,work_arrangement:$('#offerWorkArrangement').value,offer_date:$('#offerDate').value,response_due:$('#offerResponseDue').value,planned_start_date:$('#offerStartDate').value,recruiter_notes:$('#offerNotes').value};
+ try{const r=await api('/offers',{method:'POST',body:JSON.stringify(payload)});$('#offerMessage').textContent=r.message;await loadOffers();$('#offerSelect').value=r.id;await loadOfferRecord()}catch(e){$('#offerMessage').textContent=e.message}
+};
+$('#saveOffer').onclick=async()=>{
+ const id=$('#offerSelect').value;if(!id)return alert('Select an offer record.');
+ const onboarding_checklist={};document.querySelectorAll('[data-onboard]').forEach(el=>onboarding_checklist[onboardingTasks[Number(el.dataset.onboard)]]=el.checked);
+ const payload={offer_status:$('#offerStatus').value,joining_status:$('#joiningStatus').value,joined_at:$('#joinedAt').value,follow_up_at:$('#offerFollowUp').value,follow_up_notes:$('#offerFollowUpNotes').value,onboarding_checklist,event_details:$('#offerEventDetails').value};
+ try{const r=await api('/offers/'+id,{method:'PATCH',body:JSON.stringify(payload)});$('#offerUpdateMessage').textContent=r.message;$('#offerEventDetails').value='';await loadOffers();$('#offerSelect').value=id;await loadOfferRecord()}catch(e){$('#offerUpdateMessage').textContent=e.message}
+};
+
 async function loadScreeningSessions(){
  try{
   const ss=await api('/screening/sessions');
