@@ -106,9 +106,9 @@ def score_candidate(job,candidate):
     availability=candidate.get("availability_signal") or "Unknown"
     points={"Actively looking":5,"Interested":3.5,"Not looking":0}.get(availability,0)
     add("Candidate-reported availability",5,points,availability,"Use candidate-reported availability only. Open to Work profile signals are not treated as availability confirmation.")
-    score=round((weighted_points/available_weight)*100) if available_weight else 0
-    band="Strong evidence alignment" if score>=80 else ("Potential alignment" if score>=65 else ("Partial evidence alignment" if score>=45 else "Low or insufficient evidence"))
-    return {"score":score,"band":band,"criteria":criteria,"recommendation":"Recruiter review required — do not auto-reject or submit.",
+    score=round((weighted_points/available_weight)*100) if available_weight>=20 else 0
+    band=("Insufficient job criteria" if available_weight<20 else ("Strong evidence alignment" if score>=80 else ("Potential alignment" if score>=65 else ("Partial evidence alignment" if score>=45 else "Low or insufficient evidence"))))
+    return {"score":score,"band":band,"available_weight":available_weight,"criteria":criteria,"recommendation":("Add more explicit job criteria before using this score." if available_weight<20 else "Recruiter review required — do not auto-reject or submit."),
       "matched_mandatory_skills":[x for x in required if norm_skill(x) in cskills],
       "missing_mandatory_skills":[x for x in required if norm_skill(x) not in cskills],
       "provenance":{"source_type":candidate.get("source_type","Unknown"),"source_url":candidate.get("source_url",""),
