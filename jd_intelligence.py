@@ -90,6 +90,7 @@ def analyze(text):
 
     auth_terms = ["STEM OPT","OPT","H-1B","Green Card","US Citizen","EAD"]
     auth = [x for x in auth_terms if re.search(re.escape(x), text, re.I)]
+    if "STEM OPT" in auth and "OPT" in auth: auth.remove("OPT")
     employment_terms = ["C2C","W2","Contract-to-Hire","Full-time","1099","Contract"]
     employment = [x for x in employment_terms if re.search(r"\b"+re.escape(x)+r"\b",text,re.I)]
     rate = re.search(r"(?:rate|pay|compensation|salary)\s*[:\-]?\s*([^\n]+)", text, re.I)
