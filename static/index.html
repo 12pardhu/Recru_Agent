@@ -80,7 +80,23 @@ $('#sourceTaskControl').onchange=()=>loadSourcingTask().catch(e=>alert(e.message
 $('#saveSourceTask').onclick=async()=>{const id=$('#sourceTaskControl').value;if(!id)return alert('Select a sourcing task.');try{await api('/sourcing/'+id,{method:'PATCH',body:JSON.stringify({status:$('#sourceTaskStatus').value,notes:$('#sourceTaskNotes').value,target_count:Number($('#sourceTaskTarget').value||50)})});await refresh();$('#sourceTaskControl').value=id;await loadSourcingTask();}catch(e){alert(e.message)}};
 $('#prepareSource').onclick=async()=>{const id=$('#sourceJob').value;if(!id)return alert('Confirm a job requirement first.');const target=Number($('#sourceTarget').value||50);try{const r=await api('/jobs/'+id+'/sourcing-plan',{method:'POST',body:JSON.stringify({target_count:target})});$('#sourceQuery').value=(r.searches&&r.searches.length?r.searches[0].query:r.query);$('#sourceLink').textContent=r.note;await refresh();$('#sourceTaskControl').value=r.task_id;await loadSourcingTask();}catch(e){alert(e.message)}};
 $('#openLinkedin').onclick=()=>{const id=$('#sourceJob').value;if(!id)return alert('Select a job.');const q=$('#sourceQuery').value.trim();if(!q)return alert('Enter search keywords.');window.open('https://www.linkedin.com/search/results/people/?keywords='+encodeURIComponent(q),'_blank','noopener')};
-$('#runMatch').onclick=async()=>{const id=$('#matchJob').value;if(!id)return alert('Create a job first.');try{const r=await api('/jobs/'+id+'/match',{method:'POST'});$('#matchResults').innerHTML=table(['Candidate','Score','Base','Open to Work','Matched skills','Missing skills','Authorization','Action'],r.map(x=>'<tr><td>'+esc(x.candidate.name)+'</td><td><b>'+x.score+'%</b></td><td>'+x.base_match+'%</td><td>'+esc(x.open_to_work)+'</td><td>'+esc(x.matched_skills.join(', '))+'</td><td>'+esc(x.missing_skills.join(', '))+'</td><td>'+esc(x.candidate.work_auth)+'</td><td><button onclick="makeApproval('+x.candidate.id+')">Request review</button></td></tr>'))}catch(e){alert(e.message)}};
+async function loadAdvancedMatches(){
+ const id=$('#matchJob').value;if(!id)return;
+ try{
+  const data=await api('/matching/jobs/'+id+'/latest');
+  if(!data.run){$('#matchResults').innerHTML='';return}
+  const choices=['Pending','Shortlist for Screening','Hold','Not a Match','Needs More Information'];
+  $('#matchResults').innerHTML=table(['Candidate','Score','Evidence band','Matched mandatory skills','Criteria breakdown','Recruiter decision','Notes','Action'],data.results.map(x=>{
+   const r=JSON.parse(x.result_json||'{}');
+   const detail=(r.criteria||[]).map(z=>z.criterion+': '+z.points+'/'+z.weight+' ('+z.status+') — '+z.evidence).join(' | ');
+   return '<tr><td>'+esc(x.candidate_name)+'</td><td><b>'+x.score+'%</b></td><td>'+esc(x.band)+'</td><td>'+esc((r.matched_mandatory_skills||[]).join(', '))+'</td><td>'+esc(detail)+'</td><td><select id="mdecision-'+x.id+'">'+choices.map(v=>'<option '+(v===x.recruiter_decision?'selected':'')+'>'+v+'</option>').join('')+'</select></td><td><input id="mnotes-'+x.id+'" value="'+esc(x.recruiter_notes||'')+'"></td><td><button type="button" onclick="saveMatchReview('+x.id+')">Save review</button></td></tr>';
+  }));
+  $('#matchMessage').textContent='Run #'+data.run.id+' · '+data.run.candidate_count+' candidates · '+data.run.algorithm_version+'. Scores are advisory only.';
+ }catch(e){$('#matchMessage').textContent=e.message}
+}
+window.saveMatchReview=async id=>{try{const r=await api('/matching/results/'+id,{method:'PATCH',body:JSON.stringify({recruiter_decision:$('#mdecision-'+id).value,recruiter_notes:$('#mnotes-'+id).value})});$('#matchMessage').textContent=r.message;await loadAdvancedMatches()}catch(e){$('#matchMessage').textContent=e.message}};
+$('#matchJob').onchange=()=>loadAdvancedMatches();
+$('#runMatch').onclick=async()=>{const id=$('#matchJob').value;if(!id)return alert('Select a confirmed job requirement.');try{const r=await api('/matching/jobs/'+id+'/run',{method:'POST'});$('#matchMessage').textContent=r.message+' Candidates: '+r.candidate_count+'.';await loadAdvancedMatches()}catch(e){$('#matchMessage').textContent=e.message}};
 window.makeApproval=async candidate_id=>{try{await api('/approvals',{method:'POST',body:JSON.stringify({candidate_id,job_id:Number($('#matchJob').value)})});await refresh();alert('Added to approval queue.')}catch(e){alert(e.message)}};
 window.decision=async(id,status)=>{try{await api('/approvals/'+id,{method:'PATCH',body:JSON.stringify({status})});await refresh()}catch(e){alert(e.message)}};
 
