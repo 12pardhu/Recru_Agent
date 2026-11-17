@@ -113,7 +113,7 @@ def get_candidates(): return rows("SELECT * FROM candidates ORDER BY id DESC")
 @app.post("/api/candidates")
 def add_candidate(p:CandidateIn):
     if not p.name.strip(): raise HTTPException(400,"Candidate name is required")
-    if p.sourcing_task_id and not p.source_evidence.strip(): raise HTTPException(400,"Add the profile or candidate evidence you reviewed before linking this candidate to a sourcing task.")
+    if (p.sourcing_task_id or "LinkedIn" in p.source_type) and not p.source_evidence.strip(): raise HTTPException(400,"Add the profile or candidate evidence you reviewed before saving a LinkedIn-sourced candidate.")
     if p.work_auth!="Unknown" and p.work_auth_confirmed!="Candidate confirmed": raise HTTPException(400,"Only record OPT or other work authorization as confirmed when the candidate has confirmed it. Otherwise choose Unknown.")
     if p.c2c_status in ("Confirmed","Not available") and p.c2c_confirmed!="Candidate confirmed": raise HTTPException(400,"C2C status must be confirmed by the candidate before recording a yes or no.")
     if p.linkedin_url and not re.match(r"^https?://(www\.)?linkedin\.com/",p.linkedin_url.strip(),re.I): raise HTTPException(400,"Enter a valid LinkedIn profile URL")
