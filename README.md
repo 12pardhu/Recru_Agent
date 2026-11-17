@@ -17,7 +17,7 @@ Cloud-hosted recruiter-assist application for US IT staffing. The product is bei
 ## Milestone 2: Candidate Sourcing Intelligence (in development)
 
 - Generate focused LinkedIn People search variants for each JD location: role, skills, and authorization hints where stated.
-- Set a recruiter-controlled sourcing target (1–100 candidates per task).
+- Set a recruiter-controlled daily sourcing target (50–100 candidates per task).
 - Track each location/search variant as Prepared, In Progress, Completed, or Skipped.
 - Track sourcing task status, target count, recruiter notes, candidate count, timestamps, and activity history.
 - Capture candidate records manually after recruiter review in an authorized LinkedIn session.
