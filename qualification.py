@@ -61,7 +61,7 @@ def evaluate(job,candidate):
     else:
         criteria.append({"criterion":"Mandatory skills","status":"Does not meet","required":required,"candidate_value":[],"missing":missing,"evidence":"No mandatory skills were found in the candidate record."})
 
-    locs=tokens(job.get("location",""))
+    locs=[x.strip() for x in re.split(r"[;|]",job.get("location","") or "") if x.strip()]
     cand_loc=(candidate.get("location") or "").lower()
     if not locs:
         criteria.append({"criterion":"Location","status":"Not specified","required":[],"candidate_value":candidate.get("location",""),"evidence":"The job has no saved location restriction."})
