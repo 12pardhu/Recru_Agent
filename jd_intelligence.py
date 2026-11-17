@@ -181,7 +181,12 @@ async def upload_draft(file: UploadFile = File(...)):
             text = "\n".join(p.extract_text() or "" for p in PdfReader(io.BytesIO(raw)).pages)
         elif ext == ".docx":
             from docx import Document
-            text = "\n".join(p.text for p in Document(io.BytesIO(raw)).paragraphs)
+            doc = Document(io.BytesIO(raw))
+            parts = [p.text for p in doc.paragraphs if p.text.strip()]
+            for table in doc.tables:
+                for row in table.rows:
+                    parts.append(" | ".join(cell.text.strip() for cell in row.cells if cell.text.strip()))
+            text = "\n".join(parts)
         else: raise HTTPException(415,"Supported formats: TXT, MD, PDF, DOCX.")
     except HTTPException: raise
     except Exception as e: raise HTTPException(400,"Could not read this document. Scanned PDFs need OCR.") from e
