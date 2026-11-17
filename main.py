@@ -340,8 +340,10 @@ from resume_intelligence import router as resume_router
 from qualification import router as qualification_router
 from communications import router as communications_router
 from screening import router as screening_router
+from advanced_matching import router as advanced_matching_router
 app.include_router(jd_router)
 app.include_router(resume_router)
 app.include_router(qualification_router)
 app.include_router(communications_router)
 app.include_router(screening_router)
+app.include_router(advanced_matching_router)
