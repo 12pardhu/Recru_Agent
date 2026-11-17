@@ -90,6 +90,12 @@ async def upload_draft(file: UploadFile = File(...)):
     path = DOCS / (uuid.uuid4().hex + ext); path.write_bytes(raw)
     return save_draft(text,filename,str(path))
 
+@router.get("/drafts")
+def list_drafts():
+    with connect() as conn:
+        rows = conn.execute("SELECT id,original_filename,status,created_at,updated_at FROM jd_drafts ORDER BY created_at DESC").fetchall()
+    return [dict(r) for r in rows]
+
 @router.get("/drafts/{draft_id}")
 def get_draft(draft_id: str):
     return read_draft(draft_id)
