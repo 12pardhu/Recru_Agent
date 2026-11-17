@@ -377,6 +377,7 @@ from pipeline import router as pipeline_router, ensure_pipeline, advance_pipelin
 from productivity import router as productivity_router
 from privacy import router as privacy_router
 from requirement_intake import router as requirement_intake_router
+from platform_sourcing import router as platform_sourcing_router
 
 app.include_router(jd_router)
 app.include_router(resume_router)
@@ -391,3 +392,4 @@ app.include_router(productivity_router)
 app.include_router(auth_router)
 app.include_router(privacy_router)
 app.include_router(requirement_intake_router)
+app.include_router(platform_sourcing_router)
