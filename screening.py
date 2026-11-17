@@ -29,6 +29,11 @@ QUESTIONS=[
  ("c2c_availability","Engagement type","Are you able to work on C2C?"),
  ("employment_preference","Engagement type","Which engagement types do you accept (C2C, W2, both, full-time, or another arrangement)?"),
  ("years_experience","Experience","How many years of total professional experience do you have?"),
+ ("relevant_experience","Experience","How many years of experience do you have with the required technologies?"),
+ ("current_project","Current project","What is your current project, domain, role, and day-to-day responsibility?"),
+ ("notice_period","Availability","What is your notice period, and can it be shortened?"),
+ ("resume_updated","Resume","Is your resume current and updated for this role?"),
+ ("linkedin_profile","Profile","Please confirm your LinkedIn profile URL."),
  ("current_location","Location","What is your current city and state?"),
  ("work_arrangement","Work arrangement","Are you open to onsite, hybrid, remote, relocation, or travel for this role?"),
  ("expected_rate","Compensation","What is your expected hourly rate or salary range, and is it W2 or C2C?"),
@@ -44,7 +49,8 @@ def init():
           id INTEGER PRIMARY KEY, candidate_id INTEGER NOT NULL, job_id INTEGER NOT NULL,
           status TEXT NOT NULL DEFAULT 'Draft', scheduled_at TEXT DEFAULT '',
           recruiter_notes TEXT DEFAULT '', submission_consent TEXT NOT NULL DEFAULT 'Unknown',
-          created_at TEXT NOT NULL, updated_at TEXT NOT NULL, completed_at TEXT DEFAULT ''
+          created_at TEXT NOT NULL, updated_at TEXT NOT NULL, completed_at TEXT DEFAULT '',
+          rtr_required INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS screening_answers(
           id INTEGER PRIMARY KEY, session_id INTEGER NOT NULL, question_key TEXT NOT NULL,
@@ -56,8 +62,34 @@ def init():
           id INTEGER PRIMARY KEY, session_id INTEGER NOT NULL, event_type TEXT NOT NULL,
           details TEXT DEFAULT '', created_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS candidate_rtr_records(
+          id INTEGER PRIMARY KEY, candidate_id INTEGER NOT NULL, job_id INTEGER NOT NULL,
+          screening_session_id INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'Requested',
+          client_name TEXT DEFAULT '', vendor_name TEXT DEFAULT '', role_title TEXT DEFAULT '',
+          rate TEXT DEFAULT '', consent_text TEXT DEFAULT '', evidence_reference TEXT DEFAULT '',
+          requested_at TEXT NOT NULL, signed_at TEXT DEFAULT '', expires_at TEXT DEFAULT '',
+          notes TEXT DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+          UNIQUE(candidate_id, job_id, screening_session_id)
+        );
         """)
+        columns={r["name"] for r in c.execute("PRAGMA table_info(screening_sessions)").fetchall()}
+        if "rtr_required" not in columns:
+            c.execute("ALTER TABLE screening_sessions ADD COLUMN rtr_required INTEGER NOT NULL DEFAULT 0")
 init()
+
+class RTRRequest(BaseModel):
+    client_name: str = ""
+    vendor_name: str = ""
+    rate: str = ""
+    consent_text: str = ""
+    evidence_reference: str = ""
+    notes: str = ""
+
+class RTRStatusUpdate(BaseModel):
+    status: str
+    evidence_reference: str = ""
+    expires_at: str = ""
+    notes: str = ""
 
 class AnswerUpdate(BaseModel):
     answer: str = ""
@@ -187,6 +219,59 @@ def apply_confirmed_answers(session_id:int):
         c.execute("INSERT INTO screening_events(session_id,event_type,details,created_at) VALUES(?,?,?,?)",(session_id,"Confirmed answers applied","Updated candidate fields: "+", ".join(updates.keys())+"; submission consent: "+submission_consent,stamp()))
     return {"session_id":session_id,"updated_candidate_fields":list(updates.keys()),"submission_consent":submission_consent,
       "message":"Only candidate-confirmed answers were applied. Review the candidate record before proceeding."}
+
+@router.post("/sessions/{session_id}/rtr")
+def request_rtr(session_id: int, payload: RTRRequest):
+    sessions=rows("SELECT * FROM screening_sessions WHERE id=?", (session_id,))
+    if not sessions:
+        raise HTTPException(404, "Screening session not found.")
+    session=sessions[0]
+    jobs=rows("SELECT title FROM jobs WHERE id=?", (session["job_id"],))
+    with connect() as c:
+        c.execute("UPDATE screening_sessions SET rtr_required=1,updated_at=? WHERE id=?", (stamp(),session_id))
+        c.execute("""INSERT INTO candidate_rtr_records(candidate_id,job_id,screening_session_id,status,client_name,vendor_name,role_title,rate,consent_text,evidence_reference,requested_at,created_at,updated_at,notes)
+          VALUES(?,?,?,'Requested',?,?,?,?,?,?,?, ?,?,?)
+          ON CONFLICT(candidate_id,job_id,screening_session_id) DO UPDATE SET
+          status='Requested',client_name=excluded.client_name,vendor_name=excluded.vendor_name,
+          role_title=excluded.role_title,rate=excluded.rate,consent_text=excluded.consent_text,
+          evidence_reference=excluded.evidence_reference,requested_at=excluded.requested_at,
+          updated_at=excluded.updated_at,notes=excluded.notes""",
+          (session["candidate_id"],session["job_id"],session_id,payload.client_name,payload.vendor_name,
+           jobs[0]["title"] if jobs else "",payload.rate,payload.consent_text,payload.evidence_reference,
+           stamp(),stamp(),stamp(),payload.notes))
+        c.execute("INSERT INTO screening_events(session_id,event_type,details,created_at) VALUES(?,?,?,?)",
+          (session_id,"RTR requested","Job-specific RTR requested; candidate signature must be recorded before submission.",stamp()))
+    return {"session_id":session_id,"rtr_required":True,"status":"Requested","message":"RTR requirement recorded for this candidate and job."}
+
+
+@router.get("/sessions/{session_id}/rtr")
+def get_rtr(session_id: int):
+    if not rows("SELECT id FROM screening_sessions WHERE id=?", (session_id,)):
+        raise HTTPException(404, "Screening session not found.")
+    return rows("SELECT * FROM candidate_rtr_records WHERE screening_session_id=? ORDER BY id DESC", (session_id,))
+
+
+@router.patch("/sessions/{session_id}/rtr")
+def update_rtr(session_id: int, payload: RTRStatusUpdate):
+    allowed={"Requested","Sent","Signed","Declined","Expired"}
+    if payload.status not in allowed:
+        raise HTTPException(400,"RTR status must be Requested, Sent, Signed, Declined, or Expired.")
+    record=rows("SELECT * FROM candidate_rtr_records WHERE screening_session_id=? ORDER BY id DESC LIMIT 1",(session_id,))
+    if not record:
+        raise HTTPException(404,"RTR record not found.")
+    if payload.status=="Signed" and not payload.evidence_reference.strip():
+        raise HTTPException(409,"Record the signed RTR document reference before marking it signed.")
+    if payload.expires_at:
+        try: datetime.fromisoformat(payload.expires_at.replace("Z","+00:00"))
+        except ValueError: raise HTTPException(400,"RTR expiry must be a valid ISO date/time.")
+    with connect() as c:
+        c.execute("UPDATE candidate_rtr_records SET status=?,evidence_reference=?,expires_at=?,signed_at=?,notes=?,updated_at=? WHERE id=?",
+          (payload.status,payload.evidence_reference,payload.expires_at,
+           stamp() if payload.status=="Signed" else "",payload.notes,stamp(),record[0]["id"]))
+        c.execute("INSERT INTO screening_events(session_id,event_type,details,created_at) VALUES(?,?,?,?)",
+          (session_id,"RTR updated",payload.status+" · "+payload.evidence_reference,stamp()))
+    return {"session_id":session_id,"status":payload.status,"message":"Job-specific RTR status updated."}
+
 
 @router.get("/sessions/{session_id}/history")
 def screening_history(session_id:int):

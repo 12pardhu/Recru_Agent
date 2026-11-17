@@ -19,16 +19,10 @@ from auth import router as auth_router, get_session_user, audit as audit_request
 async def authentication_and_security_middleware(request, call_next):
     path=request.url.path
     user=None
-    if path.startswith("/api/") and path not in ("/api/health","/api/auth/login","/api/auth/logout"):
-        if not AUTH_CONFIGURED:
-            return JSONResponse(status_code=503,content={"detail":"Recru Agent authentication is not configured. Set ADMIN_USERNAME, ADMIN_PASSWORD, and SESSION_SECRET before using the application."})
-        user=get_session_user(request.cookies.get(COOKIE_NAME))
-        if not user:
-            return JSONResponse(status_code=401,content={"detail":"Your session has expired or you are not signed in. Please sign in again."})
-        if user["role"]=="reviewer" and request.method not in ("GET","HEAD","OPTIONS"):
-            allowed=path.startswith(("/api/approvals","/api/qualification","/api/auth/password"))
-            if not allowed:
-                return JSONResponse(status_code=403,content={"detail":"Reviewer accounts can update only approval and qualification reviews."})
+    if path.startswith("/api/") and path!="/api/health":
+        # TEMPORARY PUBLIC PILOT MODE: authentication is bypassed.
+        # Every visitor is treated as a non-admin recruiter. Do not store real candidate/client data.
+        user={"id":None,"username":"Pilot Recruiter","role":"recruiter"}
         request.state.user=user
     response=await call_next(request)
     if user and request.method not in ("GET","HEAD","OPTIONS"):
@@ -374,9 +368,12 @@ from advanced_matching import router as advanced_matching_router
 from submissions import router as submissions_router
 from interviews import router as interviews_router
 from pipeline import router as pipeline_router, ensure_pipeline, advance_pipeline
+from offers import router as offers_router
+from followups import router as followups_router
 from productivity import router as productivity_router
 from privacy import router as privacy_router
 from requirement_intake import router as requirement_intake_router
+from platform_sourcing import router as platform_sourcing_router
 
 app.include_router(jd_router)
 app.include_router(resume_router)
@@ -387,7 +384,10 @@ app.include_router(advanced_matching_router)
 app.include_router(submissions_router)
 app.include_router(interviews_router)
 app.include_router(pipeline_router)
+app.include_router(offers_router)
+app.include_router(followups_router)
 app.include_router(productivity_router)
 app.include_router(auth_router)
 app.include_router(privacy_router)
 app.include_router(requirement_intake_router)
+app.include_router(platform_sourcing_router)
