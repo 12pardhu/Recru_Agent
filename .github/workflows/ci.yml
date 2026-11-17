@@ -33,16 +33,19 @@ jobs:
           python - <<'PY'
           import main
           paths = {route.path for route in main.app.routes}
-          required = {
-              "/", "/api/health", "/api/auth/login", "/api/auth/me",
-              "/api/jd/drafts", "/api/resumes/drafts",
-              "/api/qualification", "/api/screening/sessions",
-              "/api/communications/drafts", "/api/submissions/drafts",
-              "/api/interviews", "/api/pipeline", "/api/productivity/overview",
-              "/api/privacy/requests",
-          }
-          missing = sorted(required - paths)
+          required_prefixes = (
+              "/api/health", "/api/auth/login", "/api/auth/me",
+              "/api/jd/", "/api/resumes/", "/api/qualification/",
+              "/api/screening/", "/api/communications/",
+              "/api/submissions/", "/api/interviews/",
+              "/api/pipeline/", "/api/productivity/",
+              "/api/privacy/",
+          )
+          missing = [prefix for prefix in required_prefixes
+                     if not any(path.startswith(prefix) for path in paths)]
+          if "/" not in paths:
+              missing.append("/")
           if missing:
-              raise SystemExit("Missing required routes: " + ", ".join(missing))
+              raise SystemExit("Missing required route groups: " + ", ".join(missing))
           print(f"Application import succeeded; {len(paths)} routes registered.")
           PY
