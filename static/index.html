@@ -551,7 +551,7 @@ async function bootstrapAuth(){
   const me=await api('/auth/me');await showAuthenticatedApp(me.user);
  }catch(e){$('#loginMessage').textContent=e.message==='Failed to fetch'?'Cannot connect to Recru Agent. Refresh the page.':'Please sign in with your account.';}
 }
-$('#loginButton').onclick=async()=>{try{const r=await api('/auth/login',{method:'POST',body:JSON.stringify({username:$('#loginUsername').value,password:$('#loginPassword').value})});$('#loginMessage').textContent='';await showAuthenticatedApp(r.user)}catch(e){$('#loginMessage').textContent=e.message}};
+$('#loginButton').onclick=async()=>{const button=$('#loginButton'),message=$('#loginMessage');button.disabled=true;message.textContent='Signing in…';try{const r=await api('/auth/login',{method:'POST',body:JSON.stringify({username:$('#loginUsername').value,password:$('#loginPassword').value})});message.textContent='Sign-in successful. Opening workspace…';await showAuthenticatedApp(r.user)}catch(e){message.textContent='Sign-in failed: '+(e.message||'Please try again.');}finally{button.disabled=false}};
 $('#loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter')$('#loginButton').click()});
 $('#logoutButton').onclick=async()=>{try{await api('/auth/logout',{method:'POST'})}catch(e){}location.reload()};
 
