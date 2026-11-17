@@ -48,7 +48,7 @@ def evaluate(job,candidate):
     elif exp>=min_exp:
         criteria.append({"criterion":"Total experience","status":"Potential match — verify","required":min_exp,"candidate_value":exp,"evidence":"Experience is recorded in the candidate profile; confirm dates and relevance."})
     else:
-        criteria.append({"criterion":"Total experience","status":"Does not meet","required":min_exp,"candidate_value":exp,"evidence":"Recorded experience is below the stated minimum; verify before any decision."})
+        criteria.append({"criterion":"Total experience","status":"Potential blocker — verify","required":min_exp,"candidate_value":exp,"evidence":"Recorded experience is below the stated minimum; verify before any decision."})
 
     if not required:
         criteria.append({"criterion":"Mandatory skills","status":"Not specified","required":[],"candidate_value":tokens(candidate.get("skills","")),"evidence":"No mandatory skills were saved for this job."})
@@ -59,7 +59,7 @@ def evaluate(job,candidate):
     elif matched:
         criteria.append({"criterion":"Mandatory skills","status":"Partial match","required":required,"candidate_value":matched,"missing":missing,"evidence":"Some mandatory skills are not present in the candidate record."})
     else:
-        criteria.append({"criterion":"Mandatory skills","status":"Does not meet","required":required,"candidate_value":[],"missing":missing,"evidence":"No mandatory skills were found in the candidate record."})
+        criteria.append({"criterion":"Mandatory skills","status":"Needs recruiter review","required":required,"candidate_value":[],"missing":missing,"evidence":"The resume/profile does not list these skills; absence from the record does not prove the candidate lacks them."})
 
     locs=[x.strip() for x in re.split(r"[;|]",job.get("location","") or "") if x.strip()]
     cand_loc=(candidate.get("location") or "").lower()
@@ -108,7 +108,7 @@ def evaluate(job,candidate):
     criteria.append({"criterion":"Candidate-reported availability","status":"Informational","required":"Candidate confirmation","candidate_value":availability,"evidence":"Open to Work is a profile signal only; confirm interest and availability directly."})
 
     hard=[x for x in criteria if x["criterion"] in ("Total experience","Mandatory skills","Work authorization","C2C availability")]
-    if any(x["status"]=="Does not meet" for x in hard):
+    if any(x["status"] in ("Does not meet","Potential blocker — verify") for x in hard):
         overall="Potential blocker — recruiter decision required"
     elif any(x["status"] in ("Unknown","Partial match","Needs recruiter review","Potential match — verify") for x in criteria):
         overall="Needs recruiter review"
