@@ -161,7 +161,8 @@ def match(job_id:int):
     for p in rows("SELECT * FROM candidates"):
         skills={x.lower() for x in tokens(p["skills"])}; matched=required&skills; pref=preferred&skills
         skill_score=round(65*len(matched)/len(required)) if required else 0
-        exp_score=15 if p["experience"]>=j["min_experience"] else (round(15*p["experience"]/j["min_experience"]) if j["min_experience"] else 0)
+        required_exp=j.get("min_experience")
+        exp_score=(15 if p["experience"]>=required_exp else round(15*p["experience"]/required_exp)) if required_exp is not None and required_exp>0 else 0
         loc_score=10 if not j["location"] or j["location"].lower() in p["location"].lower() else 0
         auth_match=bool(j["work_auth"]=="Unknown" or p["work_auth"].lower()==j["work_auth"].lower() or j["work_auth"]=="Any US work authorization")
         auth_score=10 if auth_match and p["work_auth"]!="Unknown" else (5 if j["work_auth"]=="Unknown" else 0)
