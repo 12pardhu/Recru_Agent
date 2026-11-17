@@ -267,7 +267,7 @@ def confirm_draft(draft_id: str, payload: dict = None):
             cur = c.execute("INSERT INTO jobs(title,location,min_experience,skills,work_auth,jd_text,created_at,domain,preferred_skills,employment_type,source_mode) VALUES(?,?,?,?,?,?,?,?,?,?,?)",(title,location,int(f.get("min_experience") or 0),skills,auth,d["jd_text"],stamp(),f.get("domain",""),preferred,employment,"both"))
             jid = cur.lastrowid
             version = 1
-        c.execute("INSERT INTO job_versions(job_id,version,snapshot_json,changed_at) VALUES(?,?,?,?)",(jid,version,json.dumps({"fields":f,"quality":report}),stamp()))
+        c.execute("INSERT INTO job_versions(job_id,version,snapshot_json,changed_at) VALUES(?,?,?,?)",(jid,version,json.dumps({"fields":f,"evidence":d["analysis"].get("evidence",{}),"quality":report}),stamp()))
         c.execute("UPDATE jd_drafts SET status='Confirmed',updated_at=? WHERE id=?",(stamp(),draft_id))
     return {"job_id":jid,"message":"Requirement confirmed and saved. Sourcing has not started; use Candidate Sourcing when ready.","quality":report}
 
