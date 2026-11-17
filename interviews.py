@@ -33,7 +33,7 @@ def validate_schedule(value, timezone_name):
         raise HTTPException(400,"Select the interview time zone.")
     try:
         local_zone = ZoneInfo(zone)
-    except ZoneInfoNotFoundError:
+    except (ZoneInfoNotFoundError, ValueError):
         raise HTTPException(400,"Use a valid IANA time zone such as America/Chicago or America/New_York.")
     current_local = datetime.now(local_zone)
     comparison = parsed.astimezone(local_zone) if parsed.tzinfo else parsed
@@ -62,7 +62,8 @@ init()
 
 @router.post("")
 def create_interview(payload:dict):
-    submission_id=int(payload.get("submission_id") or 0)
+    try: submission_id=int(payload.get("submission_id") or 0)
+    except (TypeError,ValueError): raise HTTPException(400,"Select a valid client submission.")
     subs=rows("""SELECT s.*,c.name candidate_name,j.title job_title,cl.company_name
       FROM client_submissions s JOIN candidates c ON c.id=s.candidate_id
       JOIN jobs j ON j.id=s.job_id JOIN clients cl ON cl.id=s.client_id WHERE s.id=?""",(submission_id,))
@@ -77,7 +78,8 @@ def create_interview(payload:dict):
     link=str(payload.get("meeting_link","")).strip()
     if link and not re.match(r"^https?://",link,re.I): raise HTTPException(400,"Meeting link must begin with http:// or https://.")
     if fmt=="Onsite" and not str(payload.get("meeting_location","")).strip(): raise HTTPException(400,"Enter the onsite interview location.")
-    round_number=int(payload.get("round_number",1))
+    try: round_number=int(payload.get("round_number",1))
+    except (TypeError,ValueError): raise HTTPException(400,"Interview round must be a number between 1 and 20.")
     if round_number<1 or round_number>20: raise HTTPException(400,"Interview round must be between 1 and 20.")
     existing=rows("SELECT id FROM interviews WHERE submission_id=? AND round_number=? AND status NOT IN ('Cancelled','No Show')",(submission_id,round_number))
     if existing: raise HTTPException(409,"An active interview already exists for this submission and round. Reschedule that interview or choose another round number.")
@@ -121,7 +123,8 @@ def update_interview(interview_id:int,payload:dict):
     if fmt=="Onsite" and not str(payload.get("meeting_location",old["meeting_location"])).strip(): raise HTTPException(400,"Enter the onsite interview location.")
     confirm=payload.get("candidate_confirmation",old["candidate_confirmation"])
     if confirm not in ("Unknown","Confirmed","Declined"): raise HTTPException(400,"Candidate confirmation must be Unknown, Confirmed, or Declined.")
-    round_number=int(payload.get("round_number",old["round_number"]))
+    try: round_number=int(payload.get("round_number",old["round_number"]))
+    except (TypeError,ValueError): raise HTTPException(400,"Interview round must be a number between 1 and 20.")
     if round_number<1 or round_number>20: raise HTTPException(400,"Interview round must be between 1 and 20.")
     duplicate=rows("SELECT id FROM interviews WHERE submission_id=? AND round_number=? AND id<>? AND status NOT IN ('Cancelled','No Show')",(old["submission_id"],round_number,interview_id))
     if duplicate: raise HTTPException(409,"Another active interview already uses this round number for the same submission.")
