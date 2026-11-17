@@ -260,10 +260,10 @@ def create_revision_draft(job_id: int):
       "locations":[x.strip() for x in (job.get("location") or "").split(";") if x.strip()],
       "min_experience":job.get("min_experience"),"relevant_experience":None,"technology_experience":{},
       "mandatory_skills":[x.strip() for x in (job.get("skills") or "").split(",") if x.strip()],
-      "preferred_skills":[x.strip() for x in (job.get("preferred_skills") or "").split(",") if x.strip()],
+      "preferred_skills":[x.strip() for x in (job.get("preferred_skills") or "").split(",") if x.strip()],"optional_skills":[],"technology_versions":{},
       "work_authorization":[x.strip() for x in (job.get("work_auth") or "").split(",") if x.strip() and x.strip()!="Unknown"],
       "employment_type":[x.strip() for x in (job.get("employment_type") or "Unknown").split(",") if x.strip()],
-      "rate":"","work_arrangement":[],"responsibilities":""
+      "rate":"","work_arrangement":[],"responsibilities":"","education":"","certifications":"","travel":"","relocation":""
     }
     result = {"fields":fields,"evidence":{k:{"status":"Needs review","evidence":"Copied from the previously confirmed requirement"} for k in fields}}
     did = str(uuid.uuid4())
