@@ -138,6 +138,10 @@ def quality_report(text, fields):
         warnings.append({"field":"locations","message":"No work location was identified."})
     if fields.get("min_experience") is None:
         warnings.append({"field":"min_experience","message":"Total experience was not identified."})
+    if not fields.get("rate"):
+        warnings.append({"field":"rate","message":"Rate or compensation is not stated."})
+    if not fields.get("work_arrangement"):
+        warnings.append({"field":"work_arrangement","message":"Remote, hybrid, or onsite arrangement is not stated."})
     if fields.get("work_authorization") == []:
         warnings.append({"field":"work_authorization","message":"Work authorization is not stated. It will remain Unknown."})
     if fields.get("employment_type") in ([],["Unknown"]):
@@ -262,7 +266,7 @@ def confirm_draft(draft_id: str, payload: dict = None):
             current = c.execute("SELECT id FROM jobs WHERE id=?",(existing_job_id,)).fetchone()
             if not current: raise HTTPException(404,"The requirement being revised no longer exists.")
             c.execute("UPDATE jobs SET title=?,location=?,min_experience=?,skills=?,work_auth=?,jd_text=?,domain=?,preferred_skills=?,employment_type=? WHERE id=?",
-              (title,location,int(f.get("min_experience") or 0),skills,auth,d["jd_text"],f.get("domain",""),preferred,employment,existing_job_id))
+              (title,location,f.get("min_experience"),skills,auth,d["jd_text"],f.get("domain",""),preferred,employment,existing_job_id))
             jid = existing_job_id
             version = c.execute("SELECT COALESCE(MAX(version),0)+1 AS next_version FROM job_versions WHERE job_id=?",(jid,)).fetchone()["next_version"]
         else:
